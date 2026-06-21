@@ -103,7 +103,7 @@ class _ShoppingPurchaseListDetailViewState extends State<ShoppingPurchaseListDet
   final ShoppingCategoryController _categoryController = ShoppingCategoryController();
   final ShoppingPurchaseListController _purchaseListController = ShoppingPurchaseListController();
   late ShoppingPurchaseList _purchaseList;
-  Set<String> _selectedCategoryIds = {};
+  final Set<String> _selectedCategoryIds = {};
 
   @override
   void initState() {
@@ -175,7 +175,7 @@ class _ShoppingPurchaseListDetailViewState extends State<ShoppingPurchaseListDet
                           });
                         },
                       );
-                    }).toList(),
+                    }),
                   ],
                 );
               },

@@ -57,7 +57,7 @@ class _ShoppingListViewState extends State<ShoppingListView> {
                           },
                           title: Text(category.name),
                         );
-                      }).toList(),
+                      }),
                   ],
                 ),
               ),
