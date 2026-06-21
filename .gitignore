@@ -1,0 +1,96 @@
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.build/
+.buildlog/
+.history
+.svn/
+.swiftpm/
+migrate_working_dir/
+
+# IntelliJ related
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# The .vscode folder contains launch configuration and tasks you configure in
+# VS Code which you may wish to be included in version control, so this line
+# is commented out by default.
+#.vscode/
+
+# Flutter/Dart/Pub related
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+/build/
+
+# Symbolication related
+app.*.symbols
+
+# Obfuscation related
+app.*.map.json
+
+# Android Studio will place build artifacts here
+/android/app/debug
+/android/app/profile
+/android/app/release
+lib/firebase_options.dart
+deploy-quick.ps1
+deploy.ps1
+firebase.json
+
+# -----------------------------
+# Arquivos sensíveis a ignorar
+# -----------------------------
+# Firebase / credenciais
+serviceAccount*.json
+firebase-admin*.json
+.firebase/
+.firebaserc
+
+# Android - google services e keystores
+/android/app/google-services.json
+/android/key.properties
+/android/*.jks
+/android/*.keystore
+*.jks
+*.keystore
+
+# iOS - GoogleService Info
+/ios/Runner/GoogleService-Info.plist
+/ios/GoogleService-Info.plist
+
+# Gradle / caches locais
+/.gradle
+/android/.gradle
+
+# Propriedades locais (contém caminhos/segredos)
+local.properties
+
+# Arquivos de ambiente / secrets
+.env
+.env.*
+.secrets
+secrets.yaml
+secrets.json
+credentials.json
+
+# Chaves e certificados
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+
+# Editor / IDE settings (opcional: descomente se desejar ignorar)
+# .vscode/
