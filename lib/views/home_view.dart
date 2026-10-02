@@ -43,6 +43,19 @@ class _HomeViewState extends State<HomeView> {
     _HomeData.new,
   );
 
+  /// Garante que o formulário abra sozinho apenas uma vez por sessão.
+  bool _autoOpenedForm = false;
+
+  /// Ao abrir o app, já exibe o formulário de novo lançamento (evita um clique),
+  /// desde que exista ao menos uma conta ativa para lançar.
+  void _autoOpenFormOnce(_HomeData data) {
+    if (_autoOpenedForm || !data.accounts.any((a) => a.active)) return;
+    _autoOpenedForm = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) showTransactionForm(context);
+    });
+  }
+
   void _openStatement(Account account) {
     Navigator.of(
       context,
@@ -81,6 +94,7 @@ class _HomeViewState extends State<HomeView> {
           if (snapshot.hasError) return ErrorView(error: snapshot.error);
           final data = snapshot.data;
           if (data == null) return const LoadingView();
+          _autoOpenFormOnce(data);
           return _buildContent(data);
         },
       ),

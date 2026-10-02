@@ -102,12 +102,6 @@ class _AccountCard extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback onEdit;
 
-  IconData get _icon => switch (account.type) {
-    AccountType.checking => Icons.account_balance_outlined,
-    AccountType.creditCard => Icons.credit_card,
-    AccountType.investment => Icons.trending_up,
-  };
-
   @override
   Widget build(BuildContext context) {
     final muted = context.text.bodySmall?.copyWith(color: context.colors.onSurfaceVariant);
@@ -129,18 +123,38 @@ class _AccountCard extends StatelessWidget {
                 CircleAvatar(
                   backgroundColor: context.colors.secondaryContainer,
                   foregroundColor: context.colors.onSecondaryContainer,
-                  child: Icon(_icon),
+                  child: Icon(account.type.icon),
                 ),
                 const SizedBox(width: AppSpacing.md),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(account.name, style: context.text.titleMedium),
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              account.name,
+                              style: context.text.titleMedium,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (account.isDefault) ...[
+                            const SizedBox(width: AppSpacing.xs),
+                            Icon(
+                              Icons.star,
+                              size: 18,
+                              color: context.colors.primary,
+                              semanticLabel: 'Meio de pagamento principal',
+                            ),
+                          ],
+                        ],
+                      ),
                       const SizedBox(height: 2),
                       Text(
                         [
                           account.type.label,
+                          if (account.isDefault) 'principal',
                           if (account.isCreditCard && account.closingDay != null)
                             'fecha dia ${account.closingDay}',
                           if (!account.active) 'inativa',

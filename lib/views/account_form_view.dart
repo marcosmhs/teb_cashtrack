@@ -27,6 +27,7 @@ class _AccountFormViewState extends State<AccountFormView> {
   AccountType _type = AccountType.checking;
   bool _negativeBalance = false;
   bool _active = true;
+  bool _isDefault = false;
   bool _saving = false;
 
   bool get _isEditing => widget.account != null;
@@ -42,6 +43,7 @@ class _AccountFormViewState extends State<AccountFormView> {
       _closingDayController.text = account.closingDay?.toString() ?? '';
       _type = account.type;
       _active = account.active;
+      _isDefault = account.isDefault;
     }
   }
 
@@ -66,6 +68,8 @@ class _AccountFormViewState extends State<AccountFormView> {
       active: _active,
       createdAt: widget.account?.createdAt ?? DateTime.now(),
       closingDay: int.tryParse(_closingDayController.text),
+      // Conta inativa não pode ser o meio de pagamento principal.
+      isDefault: _isDefault && _active,
     );
 
     try {
@@ -156,14 +160,22 @@ class _AccountFormViewState extends State<AccountFormView> {
                     validator: (v) => (v ?? '').trim().isEmpty ? 'Informe o nome' : null,
                   ),
                   const SizedBox(height: AppSpacing.md),
-                  DropdownButtonFormField<AccountType>(
-                    value: _type,
-                    decoration: const InputDecoration(labelText: 'Tipo'),
-                    items: [
-                      for (final t in AccountType.values)
-                        DropdownMenuItem(value: t, child: Text(t.label)),
+                  Text('Tipo', style: context.text.labelMedium),
+                  const SizedBox(height: AppSpacing.xs),
+                  SegmentedButton<AccountType>(
+                    segments: [
+                      for (final t in AccountType.selectable)
+                        ButtonSegment(value: t, label: Text(t.label), icon: Icon(t.icon)),
+                      // Contas antigas de investimento continuam editáveis.
+                      if (_type == AccountType.investment)
+                        ButtonSegment(
+                          value: AccountType.investment,
+                          label: Text(AccountType.investment.label),
+                          icon: Icon(AccountType.investment.icon),
+                        ),
                     ],
-                    onChanged: (v) => setState(() => _type = v ?? _type),
+                    selected: {_type},
+                    onSelectionChanged: (s) => setState(() => _type = s.first),
                   ),
                   const SizedBox(height: AppSpacing.md),
                   if (_type == AccountType.creditCard)
@@ -203,6 +215,17 @@ class _AccountFormViewState extends State<AccountFormView> {
                     ),
                   ],
                   const SizedBox(height: AppSpacing.xs),
+                  SwitchListTile(
+                    value: _isDefault && _active,
+                    onChanged: _active ? (v) => setState(() => _isDefault = v) : null,
+                    title: const Text('Meio de pagamento principal'),
+                    subtitle: const Text('Já vem selecionado ao abrir um novo lançamento.'),
+                    secondary: Icon(
+                      _isDefault && _active ? Icons.star : Icons.star_border,
+                      color: context.colors.primary,
+                    ),
+                    contentPadding: EdgeInsets.zero,
+                  ),
                   SwitchListTile(
                     value: _active,
                     onChanged: (v) => setState(() => _active = v),

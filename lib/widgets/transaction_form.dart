@@ -33,9 +33,6 @@ class TransactionForm extends StatefulWidget {
 }
 
 class _TransactionFormState extends State<TransactionForm> {
-  /// Última conta usada na sessão, para agilizar lançamentos seguidos.
-  static String? _lastAccountId;
-
   final _formKey = GlobalKey<FormState>();
   final _txController = TransactionController();
   final _amountController = TextEditingController();
@@ -58,7 +55,7 @@ class _TransactionFormState extends State<TransactionForm> {
     final t = widget.transaction;
     _date = t?.date ?? DateTime.now();
     _type = t?.type ?? TransactionType.debit;
-    _accountId = t?.accountId ?? _lastAccountId;
+    _accountId = t?.accountId;
     _tagId = t?.tagId;
     if (t != null) {
       _amountController.text = centsToInputText(t.amountCents);
@@ -88,7 +85,6 @@ class _TransactionFormState extends State<TransactionForm> {
     );
     try {
       await _txController.saveTransaction(transaction);
-      _lastAccountId = transaction.accountId;
       if (!mounted) return;
       Navigator.of(context).pop();
       showMessage(context, _isEditing ? 'Lançamento atualizado.' : 'Lançamento salvo.');
@@ -216,10 +212,14 @@ class _TransactionFormState extends State<TransactionForm> {
             .toList();
         final validId = accounts.any((a) => a.id == _accountId) ? _accountId : null;
         if (validId == null && accounts.isNotEmpty) {
-          // Pré-seleciona a primeira conta corrente (ou a primeira conta disponível).
+          // Pré-seleciona o meio de pagamento principal; sem ele, a primeira
+          // conta corrente ou, por fim, a primeira conta disponível.
           final preferred = accounts.firstWhere(
-            (a) => a.type == AccountType.checking,
-            orElse: () => accounts.first,
+            (a) => a.isDefault,
+            orElse: () => accounts.firstWhere(
+              (a) => a.type == AccountType.checking,
+              orElse: () => accounts.first,
+            ),
           );
           _accountId = preferred.id;
         }
@@ -228,17 +228,29 @@ class _TransactionFormState extends State<TransactionForm> {
           value: _accountId,
           isExpanded: true,
           decoration: InputDecoration(
-            labelText: 'Conta',
+            labelText: 'Meio de pagamento',
             helperText: snapshot.hasData && accounts.isEmpty
                 ? 'Cadastre uma conta na aba Contas.'
                 : null,
           ),
           items: [
             for (final a in accounts)
-              DropdownMenuItem(value: a.id, child: Text('${a.name} · ${a.type.label}')),
+              DropdownMenuItem(
+                value: a.id,
+                child: Row(
+                  children: [
+                    Icon(a.type.icon, size: 20, color: context.colors.onSurfaceVariant),
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: Text('${a.name} · ${a.type.label}', overflow: TextOverflow.ellipsis),
+                    ),
+                    if (a.isDefault) Icon(Icons.star, size: 18, color: context.colors.primary),
+                  ],
+                ),
+              ),
           ],
           onChanged: (v) => setState(() => _accountId = v),
-          validator: (v) => v == null ? 'Selecione uma conta' : null,
+          validator: (v) => v == null ? 'Selecione o meio de pagamento' : null,
         );
       },
     );

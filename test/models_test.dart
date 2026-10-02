@@ -62,6 +62,22 @@ void main() {
       expect(account.closingDay, isNull);
     });
 
+    test('isDefault é falso por padrão e persiste na ida e volta', () {
+      final legacy = Account.fromMap({'name': 'Conta'}, '1');
+      expect(legacy.isDefault, isFalse);
+
+      final account = Account(
+        id: '1',
+        name: 'Nubank',
+        type: AccountType.creditCard,
+        initialBalanceCents: 0,
+        active: true,
+        createdAt: DateTime(2026),
+        isDefault: true,
+      );
+      expect(Account.fromMap(account.toMap(), '1').isDefault, isTrue);
+    });
+
     test('descarta closingDay de contas que não são cartão', () {
       final account = Account(
         id: '1',
