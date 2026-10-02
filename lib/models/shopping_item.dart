@@ -1,3 +1,7 @@
+import 'package:cloud_firestore/cloud_firestore.dart' show Timestamp;
+
+import '../utils/firestore_parse.dart';
+
 class ShoppingItem {
   final String id;
   final String categoryId;
@@ -14,7 +18,7 @@ class ShoppingItem {
   Map<String, dynamic> toMap() => {
     'categoryId': categoryId,
     'description': description,
-    'createdAt': createdAt.toIso8601String(),
+    'createdAt': Timestamp.fromDate(createdAt),
   };
 
   factory ShoppingItem.fromMap(Map<String, dynamic> map, String id) {
@@ -22,7 +26,7 @@ class ShoppingItem {
       id: id,
       categoryId: map['categoryId'] as String? ?? '',
       description: map['description'] as String? ?? '',
-      createdAt: DateTime.tryParse(map['createdAt'] as String? ?? '') ?? DateTime.now(),
+      createdAt: parseDate(map['createdAt']),
     );
   }
 }

@@ -1,11 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:rxdart/rxdart.dart';
+
 import '../controllers/shopping_category_controller.dart';
 import '../controllers/shopping_item_controller.dart';
 import '../controllers/shopping_purchase_list_controller.dart';
 import '../models/shopping_category.dart';
 import '../models/shopping_item.dart';
 import '../models/shopping_purchase_list.dart';
+import '../theme.dart';
+import '../widgets/common.dart';
+import '../widgets/dialogs.dart';
 
+/// Cria ou edita uma lista de compras escolhendo itens do cadastro.
 class ShoppingPurchaseListCreateView extends StatefulWidget {
   const ShoppingPurchaseListCreateView({super.key, this.purchaseList});
 
@@ -16,196 +22,144 @@ class ShoppingPurchaseListCreateView extends StatefulWidget {
 }
 
 class _ShoppingPurchaseListCreateViewState extends State<ShoppingPurchaseListCreateView> {
-  final ShoppingCategoryController _categoryController = ShoppingCategoryController();
-  final ShoppingItemController _itemController = ShoppingItemController();
-  final ShoppingPurchaseListController _purchaseListController = ShoppingPurchaseListController();
-  late DateTime _selectedDate;
-  String? _selectedCategoryId;
-  final Set<String> _selectedItemIds = {};
-  final Set<String> _boughtItemIds = {};
+  final _listController = ShoppingPurchaseListController();
+  late final Stream<(List<ShoppingCategory>, List<ShoppingItem>)> _data = Rx.combineLatest2(
+    ShoppingCategoryController().getCategories(),
+    ShoppingItemController().getItems(),
+    (List<ShoppingCategory> c, List<ShoppingItem> i) => (c, i),
+  );
 
-  @override
-  void initState() {
-    super.initState();
-    final purchaseList = widget.purchaseList;
-    if (purchaseList != null) {
-      _selectedDate = purchaseList.date;
-      _selectedCategoryId = null;
-      _selectedItemIds.addAll(purchaseList.itemIds);
-      _boughtItemIds.addAll(purchaseList.boughtItemIds);
-    } else {
-      _selectedDate = DateTime.now();
-    }
-  }
+  late DateTime _date = widget.purchaseList?.date ?? DateTime.now();
+  late final Set<String> _selectedIds = {...?widget.purchaseList?.itemIds};
+  String? _categoryId;
+  bool _saving = false;
 
-  @override
-  void dispose() {
-    super.dispose();
-  }
+  bool get _isEditing => widget.purchaseList != null;
 
-  Future<void> _selectDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _selectedDate,
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2100),
-    );
-    if (picked != null) {
-      setState(() => _selectedDate = picked);
-    }
-  }
-
-  Future<void> _saveList() async {
-    if (_selectedItemIds.isEmpty) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Selecione ao menos um item.')));
+  Future<void> _save() async {
+    if (_selectedIds.isEmpty) {
+      showMessage(context, 'Selecione ao menos um item.');
       return;
     }
-
-    final purchaseList = ShoppingPurchaseList(
-      id: widget.purchaseList?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),
-      date: _selectedDate,
-      itemIds: _selectedItemIds.toList(),
-      boughtItemIds: _boughtItemIds.where((id) => _selectedItemIds.contains(id)).toList(),
+    setState(() => _saving = true);
+    final list = ShoppingPurchaseList(
+      id: widget.purchaseList?.id ?? _listController.newId(),
+      date: _date,
+      itemIds: _selectedIds.toList(),
+      boughtItemIds: (widget.purchaseList?.boughtItemIds ?? [])
+          .where(_selectedIds.contains)
+          .toList(),
     );
-
-    if (widget.purchaseList != null) {
-      await _purchaseListController.updatePurchaseList(purchaseList);
-    } else {
-      await _purchaseListController.addPurchaseList(purchaseList);
+    try {
+      await _listController.savePurchaseList(list);
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      showMessage(context, _isEditing ? 'Lista atualizada.' : 'Lista criada.');
+    } catch (e) {
+      debugPrint('Erro ao salvar lista: $e');
+      if (!mounted) return;
+      setState(() => _saving = false);
+      showMessage(context, 'Não foi possível salvar a lista.');
     }
-    if (!mounted) return;
-    Navigator.of(context).pop();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          widget.purchaseList != null ? 'Lista de compras atualizada.' : 'Lista de compras criada.',
-        ),
-      ),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          widget.purchaseList != null ? 'Editar lista de compras' : 'Nova lista de compras',
+      appBar: AppBar(title: Text(_isEditing ? 'Editar lista' : 'Nova lista de compras')),
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          child: ResponsiveBody(
+            child: FilledButton(
+              onPressed: _saving ? null : _save,
+              child: Text('Salvar lista (${_selectedIds.length} itens)'),
+            ),
+          ),
         ),
-        backgroundColor: Theme.of(context).colorScheme.surface,
-        elevation: 0,
       ),
-      body: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            InkWell(
-              onTap: _selectDate,
-              child: InputDecorator(
-                decoration: InputDecoration(
-                  labelText: 'Data da lista',
-                  filled: true,
-                  fillColor: Theme.of(context).colorScheme.surface,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+      body: StreamBuilder(
+        stream: _data,
+        builder: (context, snapshot) {
+          if (snapshot.hasError) return ErrorView(error: snapshot.error);
+          final data = snapshot.data;
+          if (data == null) return const LoadingView();
+          final (categories, items) = data;
+          final categoryNames = {for (final c in categories) c.id: c.name};
+          final visible = _categoryId == null
+              ? items
+              : items.where((i) => i.categoryId == _categoryId).toList();
+          final allVisibleSelected =
+              visible.isNotEmpty && visible.every((i) => _selectedIds.contains(i.id));
+
+          return ResponsiveBody(
+            child: ListView(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              children: [
+                DateField(
+                  label: 'Data da lista',
+                  value: _date,
+                  onChanged: (d) => setState(() => _date = d),
                 ),
-                child: Text('${_selectedDate.toLocal()}'.split(' ')[0]),
-              ),
-            ),
-            const SizedBox(height: 16),
-            StreamBuilder<List<ShoppingCategory>>(
-              stream: _categoryController.getCategories(),
-              builder: (context, filterSnapshot) {
-                final categories = filterSnapshot.data ?? [];
-                return DropdownButtonFormField<String?>(
-                  value: _selectedCategoryId,
-                  decoration: InputDecoration(
-                    labelText: 'Filtrar por categoria',
-                    filled: true,
-                    fillColor: Theme.of(context).colorScheme.surface,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  items: [
-                    const DropdownMenuItem(value: null, child: Text('Todas as categorias')),
-                    ...categories.map(
-                      (category) =>
-                          DropdownMenuItem(value: category.id, child: Text(category.name)),
+                const SizedBox(height: AppSpacing.md),
+                Wrap(
+                  spacing: AppSpacing.xs,
+                  runSpacing: AppSpacing.xs,
+                  children: [
+                    ChoiceChip(
+                      label: const Text('Todas'),
+                      selected: _categoryId == null,
+                      onSelected: (_) => setState(() => _categoryId = null),
                     ),
+                    for (final c in categories)
+                      ChoiceChip(
+                        label: Text(c.name),
+                        selected: _categoryId == c.id,
+                        onSelected: (s) => setState(() => _categoryId = s ? c.id : null),
+                      ),
                   ],
-                  onChanged: (value) => setState(() => _selectedCategoryId = value),
-                );
-              },
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              'Selecione itens cadastrados',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 12),
-            Expanded(
-              child: StreamBuilder<List<ShoppingCategory>>(
-                stream: _categoryController.getCategories(),
-                builder: (context, categorySnapshot) {
-                  final categories = categorySnapshot.data ?? [];
-                  final categoryMap = {
-                    for (final category in categories) category.id: category.name,
-                  };
-                  return StreamBuilder<List<ShoppingItem>>(
-                    stream: _itemController.getItems(),
-                    builder: (context, snapshot) {
-                      final items = snapshot.data ?? [];
-                      if (items.isEmpty) {
-                        return const Center(
-                          child: Text(
-                            'Nenhum item cadastrado. Cadastre itens antes de criar uma lista.',
+                ),
+                const SizedBox(height: AppSpacing.md),
+                if (items.isEmpty)
+                  const EmptyState(
+                    icon: Icons.shopping_basket_outlined,
+                    title: 'Nenhum item cadastrado.',
+                    message: 'Cadastre itens na aba Itens antes de montar uma lista.',
+                  )
+                else
+                  Card(
+                    clipBehavior: Clip.antiAlias,
+                    child: Column(
+                      children: [
+                        CheckboxListTile(
+                          value: allVisibleSelected,
+                          title: Text(
+                            'Selecionar todos (${visible.length})',
+                            style: context.text.titleMedium,
                           ),
-                        );
-                      }
-                      final filteredItems = _selectedCategoryId == null
-                          ? items
-                          : items.where((item) => item.categoryId == _selectedCategoryId).toList();
-                      if (filteredItems.isEmpty) {
-                        return Center(
-                          child: Text(
-                            _selectedCategoryId == null
-                                ? 'Nenhum item encontrado.'
-                                : 'Nenhum item encontrado para essa categoria.',
-                          ),
-                        );
-                      }
-                      return ListView.separated(
-                        itemCount: filteredItems.length,
-                        separatorBuilder: (_, __) => const Divider(height: 0),
-                        itemBuilder: (context, index) {
-                          final item = filteredItems[index];
-                          final selected = _selectedItemIds.contains(item.id);
-                          return CheckboxListTile(
-                            value: selected,
+                          onChanged: (v) => setState(() {
+                            final ids = visible.map((i) => i.id);
+                            v == true ? _selectedIds.addAll(ids) : _selectedIds.removeAll(ids);
+                          }),
+                        ),
+                        for (final item in visible) ...[
+                          const Divider(),
+                          CheckboxListTile(
+                            value: _selectedIds.contains(item.id),
                             title: Text(item.description),
-                            subtitle: Text(categoryMap[item.categoryId] ?? 'Sem categoria'),
-                            onChanged: (value) {
-                              setState(() {
-                                if (value == true) {
-                                  _selectedItemIds.add(item.id);
-                                } else {
-                                  _selectedItemIds.remove(item.id);
-                                }
-                              });
-                            },
-                          );
-                        },
-                      );
-                    },
-                  );
-                },
-              ),
+                            subtitle: Text(categoryNames[item.categoryId] ?? 'Sem categoria'),
+                            onChanged: (v) => setState(() {
+                              v == true ? _selectedIds.add(item.id) : _selectedIds.remove(item.id);
+                            }),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+              ],
             ),
-            const SizedBox(height: 20),
-            FilledButton(onPressed: _saveList, child: const Text('Salvar lista')),
-          ],
-        ),
+          );
+        },
       ),
     );
   }

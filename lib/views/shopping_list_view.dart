@@ -1,25 +1,71 @@
 import 'package:flutter/material.dart';
+import 'package:rxdart/rxdart.dart';
+
 import '../controllers/shopping_category_controller.dart';
 import '../controllers/shopping_item_controller.dart';
 import '../models/shopping_category.dart';
 import '../models/shopping_item.dart';
+import '../theme.dart';
+import '../widgets/common.dart';
+import '../widgets/dialogs.dart';
 import 'shopping_category_list_view.dart';
-import 'shopping_purchase_list_create_view.dart';
 import 'shopping_purchase_list_view.dart';
 
-class ShoppingListView extends StatefulWidget {
+/// Aba "Compras": cadastro de itens recorrentes e listas de compras.
+class ShoppingListView extends StatelessWidget {
   const ShoppingListView({super.key});
 
   @override
-  State<ShoppingListView> createState() => _ShoppingListViewState();
+  Widget build(BuildContext context) {
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Compras'),
+          actions: [
+            TextButton.icon(
+              onPressed: () => Navigator.of(
+                context,
+              ).push(MaterialPageRoute(builder: (_) => const ShoppingCategoryListView())),
+              icon: const Icon(Icons.category_outlined),
+              label: const Text('Categorias'),
+            ),
+          ],
+          bottom: const TabBar(
+            tabs: [
+              Tab(text: 'Listas'),
+              Tab(text: 'Itens'),
+            ],
+          ),
+        ),
+        body: const TabBarView(children: [ShoppingPurchaseListsTab(), _ShoppingItemsTab()]),
+      ),
+    );
+  }
 }
 
-class _ShoppingListViewState extends State<ShoppingListView> {
-  final ShoppingCategoryController _categoryController = ShoppingCategoryController();
-  final ShoppingItemController _itemController = ShoppingItemController();
-  final TextEditingController _descriptionController = TextEditingController();
-  ShoppingCategory? _selectedCategory;
-  Set<String> _selectedCategoryIds = {};
+class _ShoppingItemsTab extends StatefulWidget {
+  const _ShoppingItemsTab();
+
+  @override
+  State<_ShoppingItemsTab> createState() => _ShoppingItemsTabState();
+}
+
+class _ShoppingItemsTabState extends State<_ShoppingItemsTab> with AutomaticKeepAliveClientMixin {
+  final _itemController = ShoppingItemController();
+  final _descriptionController = TextEditingController();
+  late final Stream<(List<ShoppingCategory>, List<ShoppingItem>)> _data = Rx.combineLatest2(
+    ShoppingCategoryController().getCategories(),
+    _itemController.getItems(),
+    (List<ShoppingCategory> c, List<ShoppingItem> i) => (c, i),
+  );
+
+  /// Categoria do novo item (independente do filtro da lista).
+  String? _newItemCategoryId;
+  final Set<String> _filterCategoryIds = {};
+
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   void dispose() {
@@ -27,283 +73,180 @@ class _ShoppingListViewState extends State<ShoppingListView> {
     super.dispose();
   }
 
-  Future<void> _showFilterDialog(List<ShoppingCategory> categories) async {
-    final selected = Set<String>.from(_selectedCategoryIds);
-    final result = await showDialog<Set<String>>(
-      context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setState) {
-            return AlertDialog(
-              title: const Text('Filtrar por categorias'),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (categories.isEmpty)
-                      const Text('Nenhuma categoria disponível.')
-                    else
-                      ...categories.map((category) {
-                        return CheckboxListTile(
-                          value: selected.contains(category.id),
-                          onChanged: (isChecked) {
-                            setState(() {
-                              if (isChecked == true) {
-                                selected.add(category.id);
-                              } else {
-                                selected.remove(category.id);
-                              }
-                            });
-                          },
-                          title: Text(category.name),
-                        );
-                      }),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(null),
-                  child: const Text('Cancelar'),
-                ),
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(<String>{}),
-                  child: const Text('Limpar'),
-                ),
-                FilledButton(
-                  onPressed: () => Navigator.of(context).pop(selected),
-                  child: const Text('Aplicar'),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-
-    if (result != null) {
-      setState(() => _selectedCategoryIds = result);
-    }
-  }
-
   Future<void> _addItem() async {
     final description = _descriptionController.text.trim();
-    if (_selectedCategory == null) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Selecione uma categoria primeiro.')));
+    if (_newItemCategoryId == null || description.isEmpty) {
+      showMessage(context, 'Escolha a categoria e digite a descrição do item.');
       return;
     }
-    if (description.isEmpty) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Digite a descrição do item.')));
-      return;
+    try {
+      await _itemController.saveItem(
+        ShoppingItem(
+          id: _itemController.newId(),
+          categoryId: _newItemCategoryId!,
+          description: description,
+        ),
+      );
+      _descriptionController.clear();
+    } catch (e) {
+      debugPrint('Erro ao adicionar item: $e');
+      if (mounted) showMessage(context, 'Não foi possível adicionar o item.');
     }
-
-    final item = ShoppingItem(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      categoryId: _selectedCategory!.id,
-      description: description,
-    );
-
-    await _itemController.addItem(item);
-    _descriptionController.clear();
-    if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Item adicionado à lista de compras.')));
   }
 
-  Future<void> _deleteItem(String id) async {
-    await _itemController.deleteItem(id);
+  Future<void> _editItem(ShoppingItem item) async {
+    final description = await promptText(
+      context,
+      title: 'Editar item',
+      label: 'Descrição',
+      initialValue: item.description,
+    );
+    if (description == null) return;
+    await _itemController.saveItem(
+      ShoppingItem(
+        id: item.id,
+        categoryId: item.categoryId,
+        description: description,
+        createdAt: item.createdAt,
+      ),
+    );
+  }
+
+  Future<void> _deleteItem(ShoppingItem item) async {
+    final confirmed = await confirmAction(
+      context,
+      title: 'Excluir item?',
+      message: 'Excluir "${item.description}"? Ele também deixará de aparecer nas listas.',
+      confirmLabel: 'Excluir',
+      destructive: true,
+    );
+    if (confirmed) await _itemController.deleteItem(item.id);
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Lista de Compras Mensal'),
-        backgroundColor: Theme.of(context).colorScheme.surface,
-        elevation: 0,
-      ),
-      body: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            FilledButton.tonal(
+    super.build(context);
+    return StreamBuilder(
+      stream: _data,
+      builder: (context, snapshot) {
+        if (snapshot.hasError) return ErrorView(error: snapshot.error);
+        final data = snapshot.data;
+        if (data == null) return const LoadingView();
+        final (categories, allItems) = data;
+
+        if (categories.isEmpty) {
+          return EmptyState(
+            icon: Icons.category_outlined,
+            title: 'Cadastre categorias primeiro.',
+            message: 'Ex.: Hortifruti, Limpeza, Padaria.',
+            action: FilledButton(
               onPressed: () => Navigator.of(
                 context,
               ).push(MaterialPageRoute(builder: (_) => const ShoppingCategoryListView())),
               child: const Text('Gerenciar categorias'),
             ),
-            const SizedBox(height: 12),
-            FilledButton(
-              onPressed: () => Navigator.of(
-                context,
-              ).push(MaterialPageRoute(builder: (_) => const ShoppingPurchaseListCreateView())),
-              child: const Text('Criar nova lista de compras'),
-            ),
-            const SizedBox(height: 12),
-            FilledButton.tonal(
-              onPressed: () => Navigator.of(
-                context,
-              ).push(MaterialPageRoute(builder: (_) => const ShoppingPurchaseListView())),
-              child: const Text('Ver listas de compras'),
-            ),
-            const SizedBox(height: 24),
-            Expanded(
-              child: StreamBuilder<List<ShoppingCategory>>(
-                stream: _categoryController.getCategories(),
-                builder: (context, categorySnapshot) {
-                  final categories = categorySnapshot.data ?? [];
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      DropdownButtonFormField<ShoppingCategory>(
-                        value: _selectedCategory,
-                        decoration: InputDecoration(
-                          labelText: 'Categoria',
-                          filled: true,
-                          fillColor: Theme.of(context).colorScheme.surface,
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                        items: categories
-                            .map(
-                              (category) =>
-                                  DropdownMenuItem(value: category, child: Text(category.name)),
-                            )
-                            .toList(),
-                        onChanged: (value) => setState(() => _selectedCategory = value),
-                        hint: const Text('Selecione uma categoria'),
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: FilledButton.tonal(
-                              onPressed: () => _showFilterDialog(categories),
-                              child: Text(
-                                _selectedCategoryIds.isEmpty
-                                    ? 'Filtrar por categorias'
-                                    : 'Filtro: ${_selectedCategoryIds.length} categoria(s)',
-                              ),
-                            ),
-                          ),
-                          if (_selectedCategoryIds.isNotEmpty) ...[
-                            const SizedBox(width: 8),
-                            IconButton(
-                              icon: const Icon(Icons.clear),
-                              onPressed: () => setState(() => _selectedCategoryIds.clear()),
-                              tooltip: 'Limpar filtro',
-                            ),
-                          ],
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: _descriptionController,
-                        decoration: InputDecoration(
-                          labelText: 'Descrição do item',
-                          filled: true,
-                          fillColor: Theme.of(context).colorScheme.surface,
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+          );
+        }
+
+        final categoryNames = {for (final c in categories) c.id: c.name};
+        _filterCategoryIds.removeWhere((id) => !categoryNames.containsKey(id));
+        if (!categoryNames.containsKey(_newItemCategoryId)) _newItemCategoryId = null;
+        final items = _filterCategoryIds.isEmpty
+            ? allItems
+            : allItems.where((i) => _filterCategoryIds.contains(i.categoryId)).toList();
+
+        return ResponsiveBody(
+          child: ListView(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            children: [
+              AppCard(
+                padding: const EdgeInsets.all(AppSpacing.md),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text('Novo item', style: context.text.titleMedium),
+                    const SizedBox(height: AppSpacing.sm),
+                    DropdownButtonFormField<String>(
+                      value: _newItemCategoryId,
+                      isExpanded: true,
+                      decoration: const InputDecoration(labelText: 'Categoria'),
+                      items: [
+                        for (final c in categories)
+                          DropdownMenuItem(value: c.id, child: Text(c.name)),
+                      ],
+                      onChanged: (v) => setState(() => _newItemCategoryId = v),
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    TextField(
+                      controller: _descriptionController,
+                      textCapitalization: TextCapitalization.sentences,
+                      onSubmitted: (_) => _addItem(),
+                      decoration: InputDecoration(
+                        labelText: 'Descrição',
+                        suffixIcon: IconButton(
+                          icon: const Icon(Icons.add_circle),
+                          tooltip: 'Adicionar item',
+                          color: context.colors.primary,
+                          onPressed: _addItem,
                         ),
                       ),
-                      const SizedBox(height: 12),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: FilledButton(
-                          onPressed: categories.isEmpty ? null : _addItem,
-                          child: const Text('Adicionar item'),
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      Expanded(
-                        child: StreamBuilder<List<ShoppingItem>>(
-                          stream: _itemController.getItems(),
-                          builder: (context, itemSnapshot) {
-                            var items = itemSnapshot.data ?? [];
-                            if (_selectedCategory != null) {
-                              items = items
-                                  .where((item) => item.categoryId == _selectedCategory!.id)
-                                  .toList();
-                            }
-                            if (_selectedCategoryIds.isNotEmpty) {
-                              items = items
-                                  .where((item) => _selectedCategoryIds.contains(item.categoryId))
-                                  .toList();
-                            }
-                            if (items.isEmpty) {
-                              return Center(
-                                child: Text(
-                                  categories.isEmpty
-                                      ? 'Cadastre categorias para começar a montar a lista.'
-                                      : _selectedCategory == null && _selectedCategoryIds.isEmpty
-                                      ? 'Nenhum item adicionado ainda.'
-                                      : 'Nenhum item encontrado para os filtros selecionados.',
-                                  textAlign: TextAlign.center,
-                                ),
-                              );
-                            }
-                            final categoryMap = {
-                              for (final category in categories) category.id: category.name,
-                            };
-                            return ListView.separated(
-                              itemCount: items.length,
-                              separatorBuilder: (_, __) => const Divider(height: 0),
-                              itemBuilder: (context, index) {
-                                final item = items[index];
-                                final categoryName =
-                                    categoryMap[item.categoryId] ?? 'Sem categoria';
-                                return ListTile(
-                                  title: Text(item.description),
-                                  subtitle: Text(categoryName),
-                                  trailing: IconButton(
-                                    icon: Icon(
-                                      Icons.delete,
-                                      color: Theme.of(context).colorScheme.error,
-                                    ),
-                                    onPressed: () async {
-                                      final ok = await showDialog<bool>(
-                                        context: context,
-                                        builder: (_) => AlertDialog(
-                                          title: const Text('Remover item?'),
-                                          content: Text('Excluir "${item.description}" da lista?'),
-                                          actions: [
-                                            TextButton(
-                                              onPressed: () => Navigator.of(context).pop(false),
-                                              child: const Text('Cancelar'),
-                                            ),
-                                            FilledButton(
-                                              onPressed: () => Navigator.of(context).pop(true),
-                                              child: const Text('Excluir'),
-                                            ),
-                                          ],
-                                        ),
-                                      );
-                                      if (ok == true) {
-                                        await _deleteItem(item.id);
-                                      }
-                                    },
-                                  ),
-                                );
-                              },
-                            );
-                          },
-                        ),
-                      ),
-                    ],
-                  );
-                },
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
-        ),
-      ),
+              const SizedBox(height: AppSpacing.md),
+              Wrap(
+                spacing: AppSpacing.xs,
+                runSpacing: AppSpacing.xs,
+                children: [
+                  FilterChip(
+                    label: const Text('Todas'),
+                    selected: _filterCategoryIds.isEmpty,
+                    onSelected: (_) => setState(_filterCategoryIds.clear),
+                  ),
+                  for (final c in categories)
+                    FilterChip(
+                      label: Text(c.name),
+                      selected: _filterCategoryIds.contains(c.id),
+                      onSelected: (selected) => setState(() {
+                        selected ? _filterCategoryIds.add(c.id) : _filterCategoryIds.remove(c.id);
+                      }),
+                    ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.md),
+              if (items.isEmpty)
+                EmptyState(
+                  icon: Icons.shopping_basket_outlined,
+                  title: allItems.isEmpty
+                      ? 'Nenhum item cadastrado ainda.'
+                      : 'Nenhum item nas categorias selecionadas.',
+                )
+              else
+                Card(
+                  clipBehavior: Clip.antiAlias,
+                  child: Column(
+                    children: [
+                      for (final (i, item) in items.indexed) ...[
+                        if (i > 0) const Divider(),
+                        ListTile(
+                          title: Text(item.description),
+                          subtitle: Text(categoryNames[item.categoryId] ?? 'Sem categoria'),
+                          onTap: () => _editItem(item),
+                          trailing: IconButton(
+                            icon: Icon(Icons.delete_outline, color: context.colors.error),
+                            tooltip: 'Excluir ${item.description}',
+                            onPressed: () => _deleteItem(item),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

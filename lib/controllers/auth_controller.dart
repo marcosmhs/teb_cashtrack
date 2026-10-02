@@ -1,97 +1,70 @@
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
+/// Autenticação via Firebase Auth. A sessão é persistida pelo próprio Firebase,
+/// então nenhuma credencial é armazenada localmente pelo app.
 class AuthController {
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  static const _emailKey = 'cached_email';
-  static const _passwordKey = 'cached_password';
 
-  Future<User?> signIn(String email, String password) async {
-    final credential = await _auth.signInWithEmailAndPassword(
-      email: email.trim(),
-      password: password,
-    );
-    await _saveCredentials(email, password);
-    return credential.user;
+  Stream<User?> authStateChanges() => _auth.authStateChanges();
+
+  String? get currentEmail => _auth.currentUser?.email;
+
+  Future<void> signIn(String email, String password) async {
+    await _auth.signInWithEmailAndPassword(email: email.trim(), password: password);
   }
 
-  Future<User?> signUp(String email, String password) async {
-    final credential = await _auth.createUserWithEmailAndPassword(
-      email: email.trim(),
-      password: password,
-    );
-    await _saveCredentials(email, password);
-    return credential.user;
+  Future<void> signUp(String email, String password) async {
+    await _auth.createUserWithEmailAndPassword(email: email.trim(), password: password);
   }
 
-  Future<User?> tryAutoLogin() async {
-    final currentUser = _auth.currentUser;
-    if (currentUser != null) {
-      return currentUser;
-    }
-
-    final prefs = await SharedPreferences.getInstance();
-    final email = prefs.getString(_emailKey);
-    final password = prefs.getString(_passwordKey);
-    if (email == null || password == null) {
-      return null;
-    }
-
-    try {
-      final credential = await _auth.signInWithEmailAndPassword(email: email, password: password);
-      return credential.user;
-    } on FirebaseAuthException {
-      await clearCredentials();
-      return null;
-    }
+  Future<void> sendPasswordReset(String email) async {
+    await _auth.sendPasswordResetEmail(email: email.trim());
   }
 
-  Future<void> signOut() async {
-    await _auth.signOut();
-    await clearCredentials();
-  }
+  Future<void> signOut() => _auth.signOut();
 
+  /// Envia o e-mail de verificação para o novo endereço. A troca só é efetivada
+  /// depois que o usuário confirma pelo link recebido.
   Future<void> updateEmail(String email) async {
-    final user = _auth.currentUser;
-    if (user == null) {
-      throw FirebaseAuthException(code: 'user-not-found', message: 'Usuário não autenticado.');
-    }
-    await user.verifyBeforeUpdateEmail(email.trim());
-    await _saveEmail(email);
+    await _requireUser().verifyBeforeUpdateEmail(email.trim());
   }
 
   Future<void> updatePassword(String password) async {
+    await _requireUser().updatePassword(password);
+  }
+
+  User _requireUser() {
     final user = _auth.currentUser;
     if (user == null) {
       throw FirebaseAuthException(code: 'user-not-found', message: 'Usuário não autenticado.');
     }
-    await user.updatePassword(password);
-    await _savePassword(password);
+    return user;
   }
 
-  Future<String?> getCurrentEmail() async {
-    return _auth.currentUser?.email;
-  }
-
-  Future<void> _saveCredentials(String email, String password) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_emailKey, email.trim());
-    await prefs.setString(_passwordKey, password);
-  }
-
-  Future<void> _saveEmail(String email) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_emailKey, email.trim());
-  }
-
-  Future<void> _savePassword(String password) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_passwordKey, password);
-  }
-
-  Future<void> clearCredentials() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_emailKey);
-    await prefs.remove(_passwordKey);
+  /// Traduz os códigos de erro do Firebase Auth para mensagens amigáveis.
+  static String describeError(Object error) {
+    if (error is! FirebaseAuthException) return 'Ocorreu um erro inesperado. Tente novamente.';
+    switch (error.code) {
+      case 'invalid-email':
+        return 'E-mail inválido.';
+      case 'user-disabled':
+        return 'Este usuário foi desativado.';
+      case 'user-not-found':
+      case 'wrong-password':
+      case 'invalid-credential':
+        return 'E-mail ou senha incorretos.';
+      case 'email-already-in-use':
+        return 'Já existe uma conta com este e-mail.';
+      case 'weak-password':
+        return 'A senha deve ter pelo menos 6 caracteres.';
+      case 'too-many-requests':
+        return 'Muitas tentativas. Aguarde alguns minutos e tente novamente.';
+      case 'requires-recent-login':
+        return 'Por segurança, saia e entre novamente antes de alterar estes dados.';
+      case 'network-request-failed':
+        return 'Sem conexão com a internet.';
+      default:
+        return error.message ?? 'Erro de autenticação (${error.code}).';
+    }
   }
 }

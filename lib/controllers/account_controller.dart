@@ -1,29 +1,23 @@
-import 'package:cloud_firestore/cloud_firestore.dart' as firestore;
+import '../data/user_collections.dart';
 import '../models/account.dart';
 
 class AccountController {
-  final firestore.FirebaseFirestore _firestore = firestore.FirebaseFirestore.instance;
-  final String collectionName = 'accounts';
+  JsonCollection get _collection => UserCollections.of(UserCollections.accounts);
+
+  String newId() => UserCollections.newId(UserCollections.accounts);
 
   Stream<List<Account>> getAccounts() {
-    return _firestore
-        .collection(collectionName)
-        .orderBy('createdAt', descending: true)
+    return _collection
+        .orderBy('name')
         .snapshots()
-        .map(
-          (snapshot) => snapshot.docs.map((doc) => Account.fromMap(doc.data(), doc.id)).toList(),
-        );
+        .map((s) => s.docs.map((d) => Account.fromMap(d.data(), d.id)).toList());
   }
 
-  Future<void> addAccount(Account account) async {
-    await _firestore.collection(collectionName).doc(account.id).set(account.toMap());
-  }
-
-  Future<void> updateAccount(Account account) async {
-    await _firestore.collection(collectionName).doc(account.id).update(account.toMap());
+  Future<void> saveAccount(Account account) async {
+    await _collection.doc(account.id).set(account.toMap());
   }
 
   Future<void> deleteAccount(String id) async {
-    await _firestore.collection(collectionName).doc(id).delete();
+    await _collection.doc(id).delete();
   }
 }
