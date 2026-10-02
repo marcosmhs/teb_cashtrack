@@ -1,27 +1,23 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    function isAuthenticated() {
-      return request.auth != null;
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
     }
 
-    match /users/{userId} {
-      allow read, create, update, delete: if isAuthenticated() && request.auth.uid == userId;
+    // Todos os dados do app ficam em users/{uid}/... e só o dono acessa.
+    match /users/{userId}/{document=**} {
+      allow read, write: if isOwner(userId);
     }
 
-    match /accounts/{accountId} {
-      allow read, create: if isAuthenticated() && request.auth.uid == request.resource.data.userId;
-      allow update, delete: if isAuthenticated() && request.auth.uid == resource.data.userId;
-    }
-
-    match /transactions/{transactionId} {
-      allow read, create: if isAuthenticated() && request.auth.uid == request.resource.data.userId;
-      allow update, delete: if isAuthenticated() && request.auth.uid == resource.data.userId;
-    }
-
-    match /tags/{tagId} {
-      allow read, create: if isAuthenticated() && request.auth.uid == request.resource.data.userId;
-      allow update, delete: if isAuthenticated() && request.auth.uid == resource.data.userId;
+    // TEMPORÁRIO: leitura das coleções antigas (na raiz, sem dono) para a
+    // importação feita em "Dados do usuário > Importar dados antigos".
+    // Remova este bloco depois de migrar os dados.
+    match /{legacyCollection}/{docId} {
+      allow read: if request.auth != null
+        && legacyCollection in ['accounts', 'transactions', 'tags',
+                                'shopping_categories', 'shopping_items',
+                                'shopping_purchase_lists'];
     }
   }
 }

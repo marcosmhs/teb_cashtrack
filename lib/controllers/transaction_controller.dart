@@ -1,107 +1,51 @@
-import 'package:cloud_firestore/cloud_firestore.dart' as firestore;
-import 'package:flutter/foundation.dart';
+import 'package:cloud_firestore/cloud_firestore.dart' show QueryDocumentSnapshot, Timestamp;
+
+import '../data/user_collections.dart';
 import '../models/transaction.dart';
 
 class TransactionController {
-  final firestore.FirebaseFirestore _firestore = firestore.FirebaseFirestore.instance;
-  final String collectionName = 'transactions';
+  JsonCollection get _collection => UserCollections.of(UserCollections.transactions);
 
+  String newId() => UserCollections.newId(UserCollections.transactions);
+
+  List<Transaction> _map(List<QueryDocumentSnapshot<Map<String, dynamic>>> docs) =>
+      docs.map((d) => Transaction.fromMap(d.data(), d.id)).toList();
+
+  /// Todos os lançamentos do usuário, do mais recente para o mais antigo.
   Stream<List<Transaction>> getTransactions() {
-    return _firestore
-        .collection(collectionName)
-        .orderBy('date', descending: true)
-        .snapshots()
-        .map(
-          (snapshot) =>
-              snapshot.docs.map((doc) => Transaction.fromMap(doc.data(), doc.id)).toList(),
-        );
+    return _collection.orderBy('date', descending: true).snapshots().map((s) => _map(s.docs));
   }
 
-  /// Últimos lançamentos (limit)
-  Stream<List<Transaction>> getLatestTransactions(int limit) {
-    return _firestore
-        .collection(collectionName)
-        .orderBy('date', descending: true)
-        .limit(limit)
-        .snapshots()
-        .map((s) => s.docs.map((d) => Transaction.fromMap(d.data(), d.id)).toList());
+  /// Lançamentos com data entre [from] e [to] (inclusive). Limites nulos ficam em aberto.
+  Stream<List<Transaction>> getTransactionsInRange({DateTime? from, DateTime? to}) {
+    var query = _collection.orderBy('date', descending: true);
+    if (from != null) {
+      query = query.where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(from));
+    }
+    if (to != null) {
+      final endExclusive = DateTime(to.year, to.month, to.day + 1);
+      query = query.where('date', isLessThan: Timestamp.fromDate(endExclusive));
+    }
+    return query.snapshots().map((s) => _map(s.docs));
   }
 
   Stream<List<Transaction>> getTransactionsForAccount(String accountId) {
-    return _firestore
-        .collection(collectionName)
-        .where('accountId', isEqualTo: accountId)
-        .orderBy('date', descending: true)
-        .snapshots()
-        .handleError((e) {
-          // Log Firestore stream errors
-          debugPrint('Erro em getTransactionsForAccount($accountId): $e');
-        })
-        .map((s) {
-          try {
-            return s.docs.map((d) => Transaction.fromMap(d.data(), d.id)).toList();
-          } catch (e) {
-            // Log mapping/parsing errors and return empty list to keep stream alive
-            debugPrint('Erro ao mapear transações em getTransactionsForAccount($accountId): $e');
-            return <Transaction>[];
-          }
-        });
-  }
-
-  /// Sum total for a set of account IDs: debits summed minus credits summed
-  Stream<double> getTotalForAccountIds(List<String> accountIds) {
-    if (accountIds.isEmpty) return Stream.value(0.0);
-    // Firestore supports whereIn with up to 10 items; if more, split client-side
-    final query = _firestore.collection(collectionName).where('accountId', whereIn: accountIds);
-    return query.snapshots().map((s) {
-      double totalDebit = 0.0;
-      double totalCredit = 0.0;
-      for (final d in s.docs) {
-        final tx = Transaction.fromMap(d.data(), d.id);
-        if (tx.type.toLowerCase() == 'debit') {
-          totalDebit += tx.amount;
-        } else {
-          totalCredit += tx.amount;
-        }
-      }
-      // Créditos aumentam o saldo, débitos reduzem o saldo => saldo = créditos - débitos
-      return totalCredit - totalDebit;
+    // Ordenação feita no cliente para não exigir índice composto (accountId + date).
+    return _collection.where('accountId', isEqualTo: accountId).snapshots().map((s) {
+      return _map(s.docs)..sort((a, b) => b.date.compareTo(a.date));
     });
   }
 
-  /// Transactions for multiple account IDs. If more than 10 ids, falls back to client-side filter.
-  Stream<List<Transaction>> getTransactionsForAccountIds(List<String> accountIds) {
-    if (accountIds.isEmpty) return Stream.value(<Transaction>[]);
-    if (accountIds.length <= 10) {
-      return _firestore
-          .collection(collectionName)
-          .where('accountId', whereIn: accountIds)
-          .orderBy('date', descending: true)
-          .snapshots()
-          .map((s) => s.docs.map((d) => Transaction.fromMap(d.data(), d.id)).toList());
-    }
-    // Fallback: stream all and filter client-side (less efficient)
-    return _firestore
-        .collection(collectionName)
-        .orderBy('date', descending: true)
-        .snapshots()
-        .map(
-          (s) => s.docs
-              .map((d) => Transaction.fromMap(d.data(), d.id))
-              .where((tx) => accountIds.contains(tx.accountId))
-              .toList(),
-        );
+  Future<int> countForAccount(String accountId) async {
+    final result = await _collection.where('accountId', isEqualTo: accountId).count().get();
+    return result.count ?? 0;
   }
 
-  Future<void> addTransaction(Transaction transaction) async {
-    await _firestore.collection(collectionName).doc(transaction.id).set(transaction.toMap());
-  }
-
-  Future<void> updateTransaction(Transaction transaction) async {
-    await _firestore.collection(collectionName).doc(transaction.id).update(transaction.toMap());
+  Future<void> saveTransaction(Transaction transaction) async {
+    await _collection.doc(transaction.id).set(transaction.toMap());
   }
 
   Future<void> deleteTransaction(String id) async {
-    await _firestore.collection(collectionName).doc(id).delete();
+    await _collection.doc(id).delete();
   }
 }

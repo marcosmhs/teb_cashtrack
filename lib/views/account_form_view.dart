@@ -1,11 +1,17 @@
 import 'package:flutter/material.dart';
+
 import '../controllers/account_controller.dart';
+import '../controllers/transaction_controller.dart';
 import '../models/account.dart';
+import '../theme.dart';
+import '../utils/format.dart';
+import '../widgets/common.dart';
+import '../widgets/dialogs.dart';
 
 class AccountFormView extends StatefulWidget {
-  final Account? account;
-
   const AccountFormView({super.key, this.account});
+
+  final Account? account;
 
   @override
   State<AccountFormView> createState() => _AccountFormViewState();
@@ -15,20 +21,29 @@ class _AccountFormViewState extends State<AccountFormView> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _balanceController = TextEditingController();
-  final AccountController _accountController = AccountController();
+  final _closingDayController = TextEditingController();
+  final _accountController = AccountController();
 
-  String _selectedType = 'Conta Corrente';
+  AccountType _type = AccountType.checking;
+  bool _negativeBalance = false;
   bool _active = true;
-  final List<String> _accountTypes = ['Conta Corrente', 'Cartão de Crédito', 'Investimento'];
+  bool _isDefault = false;
+  bool _saving = false;
+
+  bool get _isEditing => widget.account != null;
 
   @override
   void initState() {
     super.initState();
-    if (widget.account != null) {
-      _nameController.text = widget.account!.name;
-      _balanceController.text = widget.account!.balance.toStringAsFixed(2);
-      _selectedType = widget.account!.type;
-      _active = widget.account!.active;
+    final account = widget.account;
+    if (account != null) {
+      _nameController.text = account.name;
+      _balanceController.text = centsToInputText(account.initialBalanceCents.abs());
+      _negativeBalance = account.initialBalanceCents < 0;
+      _closingDayController.text = account.closingDay?.toString() ?? '';
+      _type = account.type;
+      _active = account.active;
+      _isDefault = account.isDefault;
     }
   }
 
@@ -36,174 +51,204 @@ class _AccountFormViewState extends State<AccountFormView> {
   void dispose() {
     _nameController.dispose();
     _balanceController.dispose();
+    _closingDayController.dispose();
     super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _saving = true);
+
+    final balance = parseCurrencyToCents(_balanceController.text);
+    final account = Account(
+      id: widget.account?.id ?? _accountController.newId(),
+      name: _nameController.text.trim(),
+      type: _type,
+      initialBalanceCents: _negativeBalance ? -balance : balance,
+      active: _active,
+      createdAt: widget.account?.createdAt ?? DateTime.now(),
+      closingDay: int.tryParse(_closingDayController.text),
+      // Conta inativa não pode ser o meio de pagamento principal.
+      isDefault: _isDefault && _active,
+    );
+
+    try {
+      await _accountController.saveAccount(account);
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      showMessage(context, _isEditing ? 'Conta atualizada.' : 'Conta cadastrada.');
+    } catch (e) {
+      debugPrint('Erro ao salvar conta: $e');
+      if (!mounted) return;
+      setState(() => _saving = false);
+      showMessage(context, 'Não foi possível salvar a conta.');
+    }
+  }
+
+  Future<void> _delete() async {
+    final account = widget.account!;
+    // Impede excluir contas com lançamentos, para não deixar lançamentos órfãos.
+    final count = await TransactionController().countForAccount(account.id);
+    if (!mounted) return;
+    if (count > 0) {
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Conta com lançamentos'),
+          content: Text(
+            '"${account.name}" possui $count lançamento(s) e não pode ser excluída. '
+            'Você pode marcá-la como inativa para ocultá-la da tela inicial.',
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Entendi'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    final confirmed = await confirmAction(
+      context,
+      title: 'Excluir conta?',
+      message: 'Excluir "${account.name}"? Esta ação não pode ser desfeita.',
+      confirmLabel: 'Excluir',
+      destructive: true,
+    );
+    if (!confirmed) return;
+    await _accountController.deleteAccount(account.id);
+    if (!mounted) return;
+    Navigator.of(context).pop();
+    showMessage(context, 'Conta excluída.');
   }
 
   @override
   Widget build(BuildContext context) {
-    final isEditing = widget.account != null;
     return Scaffold(
-      backgroundColor: const Color(0xFFF4FBF4),
       appBar: AppBar(
-        elevation: 0,
-        backgroundColor: Colors.white,
-        iconTheme: const IconThemeData(color: Color(0xFF10B981)),
-        title: Text(
-          isEditing ? 'Editar Conta' : 'Criar Nova Conta',
-          style: const TextStyle(color: Color(0xFF111827)),
-        ),
+        title: Text(_isEditing ? 'Editar conta' : 'Nova conta'),
+        actions: [
+          if (_isEditing)
+            IconButton(
+              onPressed: _saving ? null : _delete,
+              icon: Icon(Icons.delete_outline, color: context.colors.error),
+              tooltip: 'Excluir conta',
+            ),
+        ],
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-        child: Container(
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: const Color(0xFFE2E8F0)),
-            boxShadow: [BoxShadow(color: Colors.black.withAlpha(75), blurRadius: 24)],
-          ),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const Text(
-                  'Preencha os dados da conta',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 16),
-                _buildInputField(
-                  label: 'Nome da Conta',
-                  controller: _nameController,
-                  hintText: 'Ex: Carteira Principal',
-                ),
-                const SizedBox(height: 16),
-                _buildInputField(
-                  label: 'Saldo Inicial',
-                  controller: _balanceController,
-                  hintText: '0,00',
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                ),
-                const SizedBox(height: 16),
-                DropdownButtonFormField<String>(
-                  value: _selectedType,
-                  decoration: _buildInputDecoration(label: 'Tipo de Conta'),
-                  items: _accountTypes
-                      .map((type) => DropdownMenuItem(value: type, child: Text(type)))
-                      .toList(),
-                  onChanged: (value) {
-                    if (value != null) {
-                      setState(() => _selectedType = value);
-                    }
-                  },
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Switch(
-                      value: _active,
-                      onChanged: (value) => setState(() => _active = value),
-                      activeColor: const Color(0xFF10B981),
+        padding: const EdgeInsets.all(AppSpacing.md),
+        child: ResponsiveBody(
+          maxWidth: 560,
+          child: AppCard(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  TextFormField(
+                    controller: _nameController,
+                    autofocus: !_isEditing,
+                    textCapitalization: TextCapitalization.words,
+                    decoration: const InputDecoration(
+                      labelText: 'Nome',
+                      hintText: 'Ex.: Banco do Brasil, Nubank',
                     ),
-                    const SizedBox(width: 8),
-                    Text(_active ? 'Ativa' : 'Inativa', style: const TextStyle(fontSize: 16)),
+                    validator: (v) => (v ?? '').trim().isEmpty ? 'Informe o nome' : null,
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  Text('Tipo', style: context.text.labelMedium),
+                  const SizedBox(height: AppSpacing.xs),
+                  SegmentedButton<AccountType>(
+                    segments: [
+                      for (final t in AccountType.selectable)
+                        ButtonSegment(value: t, label: Text(t.label), icon: Icon(t.icon)),
+                      // Contas antigas de investimento continuam editáveis.
+                      if (_type == AccountType.investment)
+                        ButtonSegment(
+                          value: AccountType.investment,
+                          label: Text(AccountType.investment.label),
+                          icon: Icon(AccountType.investment.icon),
+                        ),
+                    ],
+                    selected: {_type},
+                    onSelectionChanged: (s) => setState(() => _type = s.first),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  if (_type == AccountType.creditCard)
+                    TextFormField(
+                      controller: _closingDayController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Dia de fechamento da fatura',
+                        helperText: 'Usado para calcular a fatura atual (1 a 31).',
+                      ),
+                      validator: (v) {
+                        if ((v ?? '').isEmpty) return null;
+                        final day = int.tryParse(v!);
+                        return day == null || day < 1 || day > 31
+                            ? 'Informe um dia entre 1 e 31'
+                            : null;
+                      },
+                    )
+                  else ...[
+                    TextFormField(
+                      controller: _balanceController,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: const [CurrencyInputFormatter()],
+                      decoration: const InputDecoration(
+                        labelText: 'Saldo inicial',
+                        prefixText: r'R$ ',
+                        hintText: '0,00',
+                        helperText: 'Saldo da conta antes do primeiro lançamento no app.',
+                      ),
+                    ),
+                    CheckboxListTile(
+                      value: _negativeBalance,
+                      onChanged: (v) => setState(() => _negativeBalance = v ?? false),
+                      title: const Text('Saldo inicial negativo'),
+                      contentPadding: EdgeInsets.zero,
+                      controlAffinity: ListTileControlAffinity.leading,
+                    ),
                   ],
-                ),
-                const SizedBox(height: 24),
-                FilledButton(
-                  onPressed: _saveAccount,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFF10B981),
-                    padding: const EdgeInsets.symmetric(vertical: 18),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  const SizedBox(height: AppSpacing.xs),
+                  SwitchListTile(
+                    value: _isDefault && _active,
+                    onChanged: _active ? (v) => setState(() => _isDefault = v) : null,
+                    title: const Text('Meio de pagamento principal'),
+                    subtitle: const Text('Já vem selecionado ao abrir um novo lançamento.'),
+                    secondary: Icon(
+                      _isDefault && _active ? Icons.star : Icons.star_border,
+                      color: context.colors.primary,
+                    ),
+                    contentPadding: EdgeInsets.zero,
                   ),
-                  child: Text(
-                    isEditing ? 'Salvar Alterações' : 'Cadastrar Conta',
-                    style: const TextStyle(fontSize: 16),
+                  SwitchListTile(
+                    value: _active,
+                    onChanged: (v) => setState(() => _active = v),
+                    title: const Text('Conta ativa'),
+                    subtitle: const Text('Contas inativas não aparecem na tela inicial.'),
+                    contentPadding: EdgeInsets.zero,
                   ),
-                ),
-              ],
+                  const SizedBox(height: AppSpacing.lg),
+                  FilledButton(
+                    onPressed: _saving ? null : _save,
+                    child: _saving
+                        ? const SizedBox.square(
+                            dimension: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Text(_isEditing ? 'Salvar alterações' : 'Cadastrar conta'),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
       ),
     );
-  }
-
-  InputDecoration _buildInputDecoration({required String label}) {
-    return InputDecoration(
-      labelText: label,
-      filled: true,
-      fillColor: const Color(0xFFF8FAFC),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(18),
-        borderSide: BorderSide(color: const Color(0xFFE2E8F0)),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(18),
-        borderSide: BorderSide(color: const Color(0xFF10B981)),
-      ),
-    );
-  }
-
-  Widget _buildInputField({
-    required String label,
-    required TextEditingController controller,
-    String? hintText,
-    TextInputType keyboardType = TextInputType.text,
-  }) {
-    return TextFormField(
-      controller: controller,
-      keyboardType: keyboardType,
-      decoration: _buildInputDecoration(label: label).copyWith(hintText: hintText),
-      validator: (value) {
-        if (value == null || value.trim().isEmpty) {
-          return 'Preencha este campo';
-        }
-        return null;
-      },
-    );
-  }
-
-  Future<void> _saveAccount() async {
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
-
-    final balance = double.tryParse(_balanceController.text.replaceAll(',', '.')) ?? 0.0;
-    final account = Account(
-      id: widget.account?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),
-      name: _nameController.text.trim(),
-      email: '',
-      type: _selectedType,
-      balance: balance,
-      active: _active,
-      createdAt: widget.account?.createdAt ?? DateTime.now(),
-    );
-
-    try {
-      if (widget.account == null) {
-        await _accountController.addAccount(account);
-      } else {
-        await _accountController.updateAccount(account);
-      }
-      if (!mounted) return;
-      Navigator.of(context).pop();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            widget.account == null
-                ? 'Conta cadastrada com sucesso.'
-                : 'Conta atualizada com sucesso.',
-          ),
-        ),
-      );
-    } catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Erro ao salvar conta: $error')));
-    }
   }
 }

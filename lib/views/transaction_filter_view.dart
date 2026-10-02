@@ -1,19 +1,24 @@
 import 'package:flutter/material.dart';
-import 'package:rxdart/rxdart.dart'; // Certifique-se de ter 'rxdart' no pubspec.yaml
+import 'package:rxdart/rxdart.dart';
+
 import '../controllers/account_controller.dart';
 import '../controllers/tag_controller.dart';
 import '../controllers/transaction_controller.dart';
 import '../models/account.dart';
 import '../models/tag.dart';
 import '../models/transaction.dart';
-import 'transaction_edit_view.dart';
+import '../services/balance_calculator.dart';
+import '../theme.dart';
+import '../widgets/common.dart';
+import '../widgets/transaction_form.dart';
+import '../widgets/transaction_tile.dart';
 
-class FilterScreenData {
+class _FilterData {
   final List<Account> accounts;
   final List<Tag> tags;
   final List<Transaction> transactions;
 
-  FilterScreenData({required this.accounts, required this.tags, required this.transactions});
+  _FilterData(this.accounts, this.tags, this.transactions);
 }
 
 class TransactionFilterView extends StatefulWidget {
@@ -24,424 +29,259 @@ class TransactionFilterView extends StatefulWidget {
 }
 
 class _TransactionFilterViewState extends State<TransactionFilterView> {
-  final TransactionController _txController = TransactionController();
-  final AccountController _accountController = AccountController();
-  final TagController _tagController = TagController();
+  final _txController = TransactionController();
+  late final Stream<List<Account>> _accounts = AccountController().getAccounts();
+  late final Stream<List<Tag>> _tags = TagController().getTags();
+  late Stream<_FilterData> _data;
 
-  late final Stream<FilterScreenData> _combinedStream;
-
-  String? _selectedAccountId;
-  String _selectedType = 'all';
-  String? _selectedTagId;
-  DateTime? _fromDate;
-  DateTime? _toDate;
-  bool _showResults = false;
+  final _searchController = TextEditingController();
+  String? _accountId;
+  TransactionType? _type;
+  String? _tagId;
+  late DateTime? _fromDate;
+  late DateTime? _toDate;
 
   @override
   void initState() {
     super.initState();
-    _combinedStream =
-        Rx.combineLatest3<List<Account>, List<Tag>, List<Transaction>, FilterScreenData>(
-          _accountController.getAccounts(),
-          _tagController.getTags(),
-          _txController.getTransactions(),
-          (accounts, tags, transactions) =>
-              FilterScreenData(accounts: accounts, tags: tags, transactions: transactions),
-        ).asBroadcastStream();
+    _setCurrentMonth();
+    _subscribe();
   }
 
-  DateTime _dateOnly(DateTime date) => DateTime(date.year, date.month, date.day);
-
-  bool _matchesFilters(Transaction tx) {
-    final txDate = _dateOnly(tx.date);
-    if (_selectedAccountId != null && tx.accountId != _selectedAccountId) return false;
-    if (_selectedType != 'all' && tx.type != _selectedType) return false;
-    if (_selectedTagId != null && tx.tagId != _selectedTagId) return false;
-    if (_fromDate != null && txDate.isBefore(_dateOnly(_fromDate!))) return false;
-    if (_toDate != null && txDate.isAfter(_dateOnly(_toDate!))) return false;
-    return true;
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
-  Future<void> _pickDate(BuildContext context, bool isFrom) async {
-    final initialDate = isFrom ? _fromDate ?? DateTime.now() : _toDate ?? DateTime.now();
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: initialDate,
-      firstDate: DateTime(2000),
-      lastDate: DateTime.now(),
+  void _setCurrentMonth() {
+    final now = DateTime.now();
+    _fromDate = DateTime(now.year, now.month);
+    _toDate = DateTime(now.year, now.month + 1, 0);
+  }
+
+  /// O período é filtrado no Firestore (evita baixar todo o histórico);
+  /// os demais filtros são aplicados localmente, em tempo real.
+  void _subscribe() {
+    _data = Rx.combineLatest3(
+      _accounts,
+      _tags,
+      _txController.getTransactionsInRange(from: _fromDate, to: _toDate),
+      _FilterData.new,
     );
-    if (picked == null) return;
+  }
+
+  void _setPeriod({DateTime? from, DateTime? to, bool clearFrom = false, bool clearTo = false}) {
     setState(() {
-      if (isFrom) {
-        _fromDate = picked;
-      } else {
-        _toDate = picked;
-      }
+      _fromDate = clearFrom ? null : (from ?? _fromDate);
+      _toDate = clearTo ? null : (to ?? _toDate);
+      _subscribe();
     });
   }
 
   void _clearFilters() {
     setState(() {
-      _selectedAccountId = null;
-      _selectedType = 'all';
-      _selectedTagId = null;
-      _fromDate = null;
-      _toDate = null;
-      _showResults = false;
+      _searchController.clear();
+      _accountId = null;
+      _type = null;
+      _tagId = null;
+      _setCurrentMonth();
+      _subscribe();
     });
   }
 
-  void _searchTransactions() {
-    setState(() {
-      _showResults = true;
-    });
+  bool _matches(Transaction tx) {
+    if (_accountId != null && tx.accountId != _accountId) return false;
+    if (_type != null && tx.type != _type) return false;
+    if (_tagId != null && tx.tagId != _tagId) return false;
+    final query = _searchController.text.trim().toLowerCase();
+    if (query.isNotEmpty && !(tx.details ?? '').toLowerCase().contains(query)) return false;
+    return true;
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Lançamentos filtrados'),
-        backgroundColor: Colors.white,
-        iconTheme: const IconThemeData(color: Color(0xFF10B981)),
-        elevation: 0,
+        title: const Text('Lançamentos'),
+        actions: [TextButton(onPressed: _clearFilters, child: const Text('Limpar filtros'))],
       ),
-      body: StreamBuilder<FilterScreenData>(
-        stream: _combinedStream,
+      body: StreamBuilder<_FilterData>(
+        stream: _data,
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator(color: Color(0xFF10B981)));
-          }
-
-          if (snapshot.hasError) {
-            return const Center(child: Text('Erro ao carregar os dados.'));
-          }
-
+          if (snapshot.hasError) return ErrorView(error: snapshot.error);
           final data = snapshot.data;
-          if (data == null) return const SizedBox.shrink();
+          final accountNames = {for (final a in data?.accounts ?? <Account>[]) a.id: a.name};
+          final tagNames = {for (final t in data?.tags ?? <Tag>[]) t.id: t.name};
+          final filtered = (data?.transactions ?? []).where(_matches).toList();
+          final total = BalanceCalculator.sumSigned(filtered);
 
-          final accounts = data.accounts;
-          final tags = data.tags;
-          final transactions = data.transactions;
-
-          final accountMap = {for (final account in accounts) account.id: account.name};
-          final tagMap = {for (final tag in tags) tag.id: tag.name};
-
-          final filtered = transactions.where(_matchesFilters).toList();
-          final total = filtered.fold<double>(0.0, (sum, tx) {
-            return sum + (tx.type == 'debit' ? -tx.amount : tx.amount);
-          });
-
-          final totalText = total < 0
-              ? '- R\$ ${total.abs().toStringAsFixed(2)}'
-              : 'R\$ ${total.toStringAsFixed(2)}';
-          final totalColor = total < 0 ? const Color(0xFFB91C1C) : const Color(0xFF10B981);
-
-          return SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: const Color(0xFFE2E8F0)),
+          return ResponsiveBody(
+            child: CustomScrollView(
+              slivers: [
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.md,
+                    AppSpacing.xs,
+                    AppSpacing.md,
+                    0,
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      const Text(
-                        'Filtros',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Primeira Linha: Conta e Tipo
-                      Row(
-                        children: [
-                          Expanded(
-                            child: DropdownButtonFormField<String?>(
-                              value: _selectedAccountId,
-                              decoration: InputDecoration(
-                                labelText: 'Conta',
-                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                              ),
-                              items: [
-                                const DropdownMenuItem(value: null, child: Text('Todas')),
-                                ...accounts.map(
-                                  (account) => DropdownMenuItem(
-                                    value: account.id,
-                                    child: Text(account.name),
-                                  ),
-                                ),
-                              ],
-                              onChanged: (value) => setState(() => _selectedAccountId = value),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          SizedBox(
-                            width: 120,
-                            child: DropdownButtonFormField<String>(
-                              value: _selectedType,
-                              decoration: InputDecoration(
-                                labelText: 'Tipo',
-                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                              ),
-                              items: const [
-                                DropdownMenuItem(value: 'all', child: Text('Todos')),
-                                DropdownMenuItem(value: 'debit', child: Text('Débito')),
-                                DropdownMenuItem(value: 'credit', child: Text('Crédito')),
-                              ],
-                              onChanged: (value) => setState(() => _selectedType = value ?? 'all'),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-
-                      // Segunda Linha: Tag e De
-                      Row(
-                        children: [
-                          Expanded(
-                            child: DropdownButtonFormField<String?>(
-                              value: _selectedTagId,
-                              decoration: InputDecoration(
-                                labelText: 'Tag',
-                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                              ),
-                              items: [
-                                const DropdownMenuItem(value: null, child: Text('Todas')),
-                                ...tags.map(
-                                  (tag) => DropdownMenuItem(value: tag.id, child: Text(tag.name)),
-                                ),
-                              ],
-                              onChanged: (value) => setState(() => _selectedTagId = value),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: InkWell(
-                              onTap: () => _pickDate(context, true),
-                              child: InputDecorator(
-                                decoration: InputDecoration(
-                                  labelText: 'De',
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                ),
-                                child: Text(
-                                  _fromDate != null
-                                      ? '${_dateOnly(_fromDate!).toLocal()}'.split(' ')[0]
-                                      : 'Qualquer data',
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-
-                      // Terceira Linha Corrigida: Até, Limpar e Buscar dividindo o espaço igualmente
-                      Row(
-                        children: [
-                          Expanded(
-                            child: InkWell(
-                              onTap: () => _pickDate(context, false),
-                              child: InputDecorator(
-                                decoration: InputDecoration(
-                                  labelText: 'Até',
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                ),
-                                child: Text(
-                                  _toDate != null
-                                      ? '${_dateOnly(_toDate!).toLocal()}'.split(' ')[0]
-                                      : 'Qualquer data',
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: FilledButton(
-                              onPressed: _clearFilters,
-                              style: FilledButton.styleFrom(
-                                backgroundColor: const Color(0xFF10B981),
-                                padding: const EdgeInsets.symmetric(vertical: 16),
-                              ),
-                              child: const Text('Limpar'),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: FilledButton(
-                              onPressed: _searchTransactions,
-                              style: FilledButton.styleFrom(
-                                backgroundColor: const Color(0xFF0F766E),
-                                padding: const EdgeInsets.symmetric(vertical: 16),
-                              ),
-                              child: const Text('Buscar'),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
+                  sliver: SliverToBoxAdapter(child: _buildFilters(data)),
                 ),
-                const SizedBox(height: 16),
-                if (!_showResults)
-                  const Padding(
-                    padding: EdgeInsets.only(top: 48),
-                    child: Center(
-                      child: Text(
-                        'Use os filtros e toque em Buscar para ver os lançamentos.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: Color(0xFF64748B)),
+                if (data == null)
+                  const SliverFillRemaining(child: LoadingView())
+                else ...[
+                  SliverPadding(
+                    padding: const EdgeInsets.all(AppSpacing.md),
+                    sliver: SliverToBoxAdapter(
+                      child: AppCard(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: AppSpacing.md,
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                '${filtered.length} lançamento(s)',
+                                style: context.text.bodyLarge?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            AmountText(total, signed: true),
+                          ],
+                        ),
                       ),
                     ),
-                  )
-                else ...[
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF8FAFC),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: const Color(0xFFE2E8F0)),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Total exibido',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                        ),
-                        Text(
-                          totalText,
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                            color: totalColor,
-                          ),
-                        ),
-                      ],
-                    ),
                   ),
-                  const SizedBox(height: 16),
                   if (filtered.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.only(top: 24),
-                      child: Center(
-                        child: Text('Nenhum lançamento encontrado para os filtros selecionados.'),
+                    const SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: EmptyState(
+                        icon: Icons.search_off,
+                        title: 'Nenhum lançamento encontrado.',
+                        message: 'Ajuste os filtros ou o período.',
                       ),
                     )
                   else
-                    ListView.separated(
-                      shrinkWrap: true,
-                      primary: false,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: filtered.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 12),
-                      itemBuilder: (context, index) {
-                        final tx = filtered[index];
-                        final isDebit = tx.type == 'debit';
-                        return InkWell(
-                          onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute(builder: (_) => TransactionEditView(transaction: tx)),
-                          ),
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: const Color(0xFFE2E8F0)),
-                            ),
-                            padding: const EdgeInsets.all(16),
-                            child: Row(
-                              children: [
-                                CircleAvatar(
-                                  backgroundColor: isDebit
-                                      ? const Color(0xFFFEE2E2)
-                                      : const Color(0xFFDCFCE7),
-                                  child: Icon(
-                                    isDebit ? Icons.remove : Icons.add,
-                                    color: isDebit
-                                        ? const Color(0xFFB91C1C)
-                                        : const Color(0xFF10B981),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        tx.details ?? (isDebit ? 'Débito' : 'Crédito'),
-                                        style: const TextStyle(fontWeight: FontWeight.w700),
-                                      ),
-                                      const SizedBox(height: 6),
-                                      Text(
-                                        '${'${_dateOnly(tx.date).toLocal()}'.split(' ')[0]} • ${tx.date.toLocal().toIso8601String().split('T').last.substring(0, 5)}',
-                                        style: const TextStyle(
-                                          color: Color(0xFF94A3B8),
-                                          fontSize: 12,
-                                        ),
-                                      ),
-                                      if (_selectedAccountId == null) ...[
-                                        const SizedBox(height: 6),
-                                        Text(
-                                          accountMap[tx.accountId] ?? 'Conta',
-                                          style: const TextStyle(
-                                            color: Color(0xFF64748B),
-                                            fontSize: 12,
-                                          ),
-                                        ),
-                                      ],
-                                      if (tx.tagId != null && tx.tagId!.isNotEmpty) ...[
-                                        const SizedBox(height: 8),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 8,
-                                            vertical: 4,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: const Color(0xFFEFF6FF),
-                                            borderRadius: BorderRadius.circular(10),
-                                          ),
-                                          child: Text(
-                                            tagMap[tx.tagId!] ?? '',
-                                            style: const TextStyle(
-                                              fontSize: 11,
-                                              color: Color(0xFF1E293B),
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Text(
-                                  '${isDebit ? '-' : '+'} R\$ ${tx.amount.toStringAsFixed(2)}',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w700,
-                                    color: isDebit
-                                        ? const Color(0xFFB91C1C)
-                                        : const Color(0xFF10B981),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
+                    SliverPadding(
+                      padding: const EdgeInsets.fromLTRB(
+                        AppSpacing.md,
+                        0,
+                        AppSpacing.md,
+                        AppSpacing.lg,
+                      ),
+                      sliver: SliverList.separated(
+                        itemCount: filtered.length,
+                        separatorBuilder: (_, _) => const Divider(indent: 20, endIndent: 20),
+                        itemBuilder: (context, i) {
+                          final tx = filtered[i];
+                          return TransactionTile(
+                            transaction: tx,
+                            accountName: _accountId == null ? accountNames[tx.accountId] : null,
+                            tagName: tagNames[tx.tagId],
+                            onTap: () => showTransactionForm(context, transaction: tx),
+                          );
+                        },
+                      ),
                     ),
                 ],
               ],
             ),
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildFilters(_FilterData? data) {
+    final accounts = data?.accounts ?? [];
+    final tags = data?.tags ?? [];
+    final validAccount = accounts.any((a) => a.id == _accountId) ? _accountId : null;
+    final validTag = tags.any((t) => t.id == _tagId) ? _tagId : null;
+
+    return AppCard(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TextField(
+            controller: _searchController,
+            onChanged: (_) => setState(() {}),
+            decoration: const InputDecoration(
+              labelText: 'Buscar na descrição',
+              prefixIcon: Icon(Icons.search),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Row(
+            children: [
+              Expanded(
+                child: DateField(
+                  label: 'De',
+                  value: _fromDate,
+                  emptyText: 'Início',
+                  onChanged: (d) => _setPeriod(from: d),
+                  onCleared: () => _setPeriod(clearFrom: true),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: DateField(
+                  label: 'Até',
+                  value: _toDate,
+                  emptyText: 'Hoje em diante',
+                  onChanged: (d) => _setPeriod(to: d),
+                  onCleared: () => _setPeriod(clearTo: true),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
+            children: [
+              SizedBox(
+                width: 220,
+                child: DropdownButtonFormField<String?>(
+                  value: validAccount,
+                  isExpanded: true,
+                  decoration: const InputDecoration(labelText: 'Conta'),
+                  items: [
+                    const DropdownMenuItem(value: null, child: Text('Todas')),
+                    for (final a in accounts) DropdownMenuItem(value: a.id, child: Text(a.name)),
+                  ],
+                  onChanged: (v) => setState(() => _accountId = v),
+                ),
+              ),
+              SizedBox(
+                width: 220,
+                child: DropdownButtonFormField<String?>(
+                  value: validTag,
+                  isExpanded: true,
+                  decoration: const InputDecoration(labelText: 'Tag'),
+                  items: [
+                    const DropdownMenuItem(value: null, child: Text('Todas')),
+                    for (final t in tags) DropdownMenuItem(value: t.id, child: Text(t.name)),
+                  ],
+                  onChanged: (v) => setState(() => _tagId = v),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          SegmentedButton<TransactionType?>(
+            segments: const [
+              ButtonSegment(value: null, label: Text('Todos')),
+              ButtonSegment(value: TransactionType.debit, label: Text('Despesas')),
+              ButtonSegment(value: TransactionType.credit, label: Text('Receitas')),
+            ],
+            selected: {_type},
+            onSelectionChanged: (s) => setState(() => _type = s.first),
+          ),
+        ],
       ),
     );
   }

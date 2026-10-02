@@ -1,133 +1,111 @@
-// ignore_for_file: use_build_context_synchronously
-
 import 'package:flutter/material.dart';
+
 import '../controllers/shopping_category_controller.dart';
 import '../models/shopping_category.dart';
+import '../theme.dart';
+import '../widgets/common.dart';
+import '../widgets/dialogs.dart';
 
 class ShoppingCategoryListView extends StatefulWidget {
-  final bool forSelection;
-  const ShoppingCategoryListView({super.key, this.forSelection = false});
+  const ShoppingCategoryListView({super.key});
 
   @override
   State<ShoppingCategoryListView> createState() => _ShoppingCategoryListViewState();
 }
 
 class _ShoppingCategoryListViewState extends State<ShoppingCategoryListView> {
-  final ShoppingCategoryController _categoryController = ShoppingCategoryController();
+  final _controller = ShoppingCategoryController();
+  late final Stream<List<ShoppingCategory>> _categories = _controller.getCategories();
 
-  Future<void> _showAddEditDialog({ShoppingCategory? category}) async {
-    final controller = TextEditingController(text: category?.name ?? '');
-    final isEdit = category != null;
-    final res = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: Text(isEdit ? 'Editar categoria' : 'Nova categoria'),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(labelText: 'Nome'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () async {
-              final name = controller.text.trim();
-              if (name.isEmpty) return;
-              if (isEdit) {
-                await _categoryController.updateCategory(
-                  ShoppingCategory(id: category.id, name: name),
-                );
-              } else {
-                final id = DateTime.now().millisecondsSinceEpoch.toString();
-                await _categoryController.addCategory(ShoppingCategory(id: id, name: name));
-              }
-              Navigator.of(context).pop(true);
-            },
-            child: const Text('Salvar'),
-          ),
-        ],
-      ),
+  Future<void> _edit([ShoppingCategory? category]) async {
+    final name = await promptText(
+      context,
+      title: category == null ? 'Nova categoria' : 'Editar categoria',
+      label: 'Nome',
+      initialValue: category?.name ?? '',
     );
-    if (res == true) setState(() {});
+    if (name == null) return;
+    try {
+      await _controller.saveCategory(
+        ShoppingCategory(id: category?.id ?? _controller.newId(), name: name),
+      );
+    } catch (e) {
+      debugPrint('Erro ao salvar categoria: $e');
+      if (mounted) showMessage(context, 'Não foi possível salvar a categoria.');
+    }
+  }
+
+  Future<void> _delete(ShoppingCategory category) async {
+    // Impede excluir categorias em uso, para não deixar itens órfãos.
+    final count = await _controller.countItems(category.id);
+    if (!mounted) return;
+    if (count > 0) {
+      showMessage(
+        context,
+        '"${category.name}" possui $count item(ns). Mova ou exclua os itens antes de excluir a categoria.',
+      );
+      return;
+    }
+    final confirmed = await confirmAction(
+      context,
+      title: 'Excluir categoria?',
+      message: 'Excluir "${category.name}"?',
+      confirmLabel: 'Excluir',
+      destructive: true,
+    );
+    if (confirmed) await _controller.deleteCategory(category.id);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.forSelection ? 'Selecione uma categoria' : 'Categorias de compras'),
-        backgroundColor: Colors.white,
-        elevation: 0,
+      appBar: AppBar(title: const Text('Categorias de compras')),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _edit,
+        icon: const Icon(Icons.add),
+        label: const Text('Nova categoria'),
       ),
       body: StreamBuilder<List<ShoppingCategory>>(
-        stream: _categoryController.getCategories(),
+        stream: _categories,
         builder: (context, snapshot) {
-          final categories = snapshot.data ?? [];
+          if (snapshot.hasError) return ErrorView(error: snapshot.error);
+          final categories = snapshot.data;
+          if (categories == null) return const LoadingView();
           if (categories.isEmpty) {
-            return Center(
-              child: Text(
-                widget.forSelection
-                    ? 'Nenhuma categoria disponível.'
-                    : 'Nenhuma categoria cadastrada ainda.',
-              ),
+            return const EmptyState(
+              icon: Icons.category_outlined,
+              title: 'Nenhuma categoria cadastrada.',
+              message: 'Ex.: Hortifruti, Limpeza, Padaria.',
             );
           }
-          return ListView.separated(
-            itemCount: categories.length,
-            separatorBuilder: (_, __) => const Divider(height: 0),
-            itemBuilder: (context, index) {
-              final category = categories[index];
-              return ListTile(
-                title: Text(category.name),
-                onTap: () {
-                  if (widget.forSelection) {
-                    Navigator.of(context).pop(category);
-                  } else {
-                    _showAddEditDialog(category: category);
-                  }
-                },
-                trailing: widget.forSelection
-                    ? null
-                    : IconButton(
-                        icon: const Icon(Icons.delete, color: Color(0xFFEF4444)),
-                        onPressed: () async {
-                          final ok = await showDialog<bool>(
-                            context: context,
-                            builder: (_) => AlertDialog(
-                              title: const Text('Excluir categoria?'),
-                              content: Text(
-                                'Excluir "${category.name}"? Esta ação não pode ser desfeita.',
-                              ),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => Navigator.of(context).pop(false),
-                                  child: const Text('Cancelar'),
-                                ),
-                                FilledButton(
-                                  onPressed: () => Navigator.of(context).pop(true),
-                                  child: const Text('Excluir'),
-                                ),
-                              ],
-                            ),
-                          );
-                          if (ok == true) {
-                            await _categoryController.deleteCategory(category.id);
-                          }
-                        },
-                      ),
-              );
-            },
+          return ResponsiveBody(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.xs, AppSpacing.md, 96),
+              children: [
+                Card(
+                  clipBehavior: Clip.antiAlias,
+                  child: Column(
+                    children: [
+                      for (final (i, category) in categories.indexed) ...[
+                        if (i > 0) const Divider(),
+                        ListTile(
+                          title: Text(category.name),
+                          onTap: () => _edit(category),
+                          trailing: IconButton(
+                            icon: Icon(Icons.delete_outline, color: context.colors.error),
+                            tooltip: 'Excluir ${category.name}',
+                            onPressed: () => _delete(category),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
           );
         },
       ),
-      floatingActionButton: widget.forSelection
-          ? null
-          : FloatingActionButton(
-              onPressed: () => _showAddEditDialog(),
-              child: const Icon(Icons.add),
-            ),
     );
   }
 }

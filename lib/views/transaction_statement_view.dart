@@ -1,142 +1,143 @@
 import 'package:flutter/material.dart';
-import '../controllers/transaction_controller.dart';
+import 'package:rxdart/rxdart.dart';
+
 import '../controllers/tag_controller.dart';
+import '../controllers/transaction_controller.dart';
+import '../models/account.dart';
 import '../models/tag.dart';
 import '../models/transaction.dart';
-import 'transaction_edit_view.dart';
+import '../services/balance_calculator.dart';
+import '../theme.dart';
+import '../utils/format.dart';
+import '../widgets/common.dart';
+import '../widgets/transaction_form.dart';
+import '../widgets/transaction_tile.dart';
 
-class TransactionStatementView extends StatelessWidget {
-  final List<String> accountIds;
-  final String accountName;
+class TransactionStatementView extends StatefulWidget {
+  const TransactionStatementView({super.key, required this.account});
 
-  const TransactionStatementView({super.key, required this.accountIds, required this.accountName});
+  final Account account;
+
+  @override
+  State<TransactionStatementView> createState() => _TransactionStatementViewState();
+}
+
+class _TransactionStatementViewState extends State<TransactionStatementView> {
+  late final Stream<(List<Transaction>, Map<String, String>)> _data = Rx.combineLatest2(
+    TransactionController().getTransactionsForAccount(widget.account.id),
+    TagController().getTags(),
+    (List<Transaction> txs, List<Tag> tags) => (txs, {for (final t in tags) t.id: t.name}),
+  );
+
+  /// Para cartões: exibir só a fatura aberta (padrão) ou todo o histórico.
+  bool _onlyCurrentInvoice = true;
+
+  Account get account => widget.account;
 
   @override
   Widget build(BuildContext context) {
-    final TransactionController txController = TransactionController();
-    final TagController tagController = TagController();
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Extrato - $accountName'),
-        backgroundColor: Colors.white,
-        iconTheme: const IconThemeData(color: Color(0xFF10B981)),
-        elevation: 0,
-      ),
-      body: StreamBuilder<List<Transaction>>(
-        stream: txController.getTransactionsForAccountIds(accountIds),
+      appBar: AppBar(title: Text('Extrato · ${account.name}')),
+      body: StreamBuilder(
+        stream: _data,
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) return Center(child: Text('Erro: ${snapshot.error}'));
-          final txs = snapshot.data ?? [];
-          if (txs.isEmpty) return const Center(child: Text('Nenhum lançamento encontrado.'));
-          final total = txs.fold<double>(0.0, (sum, tx) {
-            return sum + (tx.type == 'debit' ? -tx.amount : tx.amount);
-          });
-          final totalText = total < 0
-              ? '- R\$ ${total.abs().toStringAsFixed(2)}'
-              : 'R\$ ${total.toStringAsFixed(2)}';
-          final totalColor = total < 0 ? const Color(0xFFB91C1C) : const Color(0xFF10B981);
-          return Column(
-            children: [
-              Container(
-                width: double.infinity,
-                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF8FAFC),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'Total exibido',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                    ),
-                    Text(
-                      totalText,
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: totalColor,
-                      ),
-                    ),
-                  ],
-                ),
+          if (snapshot.hasError) return ErrorView(error: snapshot.error);
+          final data = snapshot.data;
+          if (data == null) return const LoadingView();
+          final (allTxs, tagNames) = data;
+
+          final period = BalanceCalculator.currentInvoicePeriod(account.closingDay, DateTime.now());
+          final showInvoice = account.isCreditCard && _onlyCurrentInvoice;
+          final txs = showInvoice ? allTxs.where((t) => period.contains(t.date)).toList() : allTxs;
+
+          return ResponsiveBody(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.md,
+                AppSpacing.xs,
+                AppSpacing.md,
+                AppSpacing.lg,
               ),
-              Expanded(
-                child: ListView.separated(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: txs.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 12),
-                  itemBuilder: (context, index) {
-                    final tx = txs[index];
-                    return ListTile(
-                      onTap: () => Navigator.of(context).push(
-                        MaterialPageRoute(builder: (_) => TransactionEditView(transaction: tx)),
-                      ),
-                      tileColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      leading: CircleAvatar(
-                        backgroundColor: tx.type == 'debit'
-                            ? const Color(0xFFFEE2E2)
-                            : const Color(0xFFDCFCE7),
-                        child: Icon(
-                          tx.type == 'debit' ? Icons.remove : Icons.add,
-                          color: tx.type == 'debit'
-                              ? const Color(0xFFB91C1C)
-                              : const Color(0xFF10B981),
-                        ),
-                      ),
-                      title: Text(tx.details ?? (tx.type == 'debit' ? 'Débito' : 'Crédito')),
-                      subtitle: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('', style: const TextStyle(color: Color(0xFF94A3B8))),
-                          if (tx.tagId != null && tx.tagId!.isNotEmpty) ...[
-                            const SizedBox(height: 6),
-                            FutureBuilder<Tag?>(
-                              future: tagController.getTagById(tx.tagId!),
-                              builder: (context, snap) {
-                                if (!snap.hasData || snap.data == null) {
-                                  return const SizedBox.shrink();
-                                }
-                                final tag = snap.data as Tag;
-                                return Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFEFF6FF),
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Text(
-                                    tag.name,
-                                    style: const TextStyle(fontSize: 11, color: Color(0xFF1E293B)),
-                                  ),
-                                );
-                              },
-                            ),
-                          ],
+              children: [
+                _buildSummary(allTxs, period),
+                if (account.isCreditCard) ...[
+                  const SizedBox(height: AppSpacing.md),
+                  SegmentedButton<bool>(
+                    segments: const [
+                      ButtonSegment(value: true, label: Text('Fatura atual')),
+                      ButtonSegment(value: false, label: Text('Todos')),
+                    ],
+                    selected: {_onlyCurrentInvoice},
+                    onSelectionChanged: (s) => setState(() => _onlyCurrentInvoice = s.first),
+                  ),
+                ],
+                const SizedBox(height: AppSpacing.md),
+                if (txs.isEmpty)
+                  const EmptyState(icon: Icons.receipt_long_outlined, title: 'Nenhum lançamento.')
+                else
+                  AppCard(
+                    padding: EdgeInsets.zero,
+                    child: Column(
+                      children: [
+                        for (final (i, t) in txs.indexed) ...[
+                          if (i > 0) const Divider(indent: 20, endIndent: 20),
+                          TransactionTile(
+                            transaction: t,
+                            tagName: tagNames[t.tagId],
+                            onTap: () => showTransactionForm(context, transaction: t),
+                          ),
                         ],
-                      ),
-                      trailing: Text(
-                        '',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w700,
-                          color: tx.type == 'debit'
-                              ? const Color(0xFFB91C1C)
-                              : const Color(0xFF10B981),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ],
+                      ],
+                    ),
+                  ),
+              ],
+            ),
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildSummary(List<Transaction> txs, InvoicePeriod period) {
+    final muted = context.text.bodyMedium?.copyWith(color: context.colors.onSurfaceVariant);
+
+    if (account.isCreditCard) {
+      final invoice = BalanceCalculator.currentInvoice(account, txs, DateTime.now());
+      return AppCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Fatura atual', style: muted),
+            const SizedBox(height: 4),
+            AmountText(-invoice, style: context.text.headlineMedium),
+            const SizedBox(height: 4),
+            Text(
+              account.closingDay == null
+                  ? 'Sem dia de fechamento definido: considerando todos os lançamentos.'
+                  : '${formatDate(period.start!.add(const Duration(days: 1)))} a ${formatDate(period.end)}',
+              style: muted,
+            ),
+          ],
+        ),
+      );
+    }
+
+    final balance = BalanceCalculator.accountBalance(account, txs);
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Saldo atual', style: muted),
+          const SizedBox(height: 4),
+          AmountText(balance, style: context.text.headlineMedium),
+          if (account.initialBalanceCents != 0) ...[
+            const SizedBox(height: 4),
+            Text(
+              'Inclui saldo inicial de ${formatCents(account.initialBalanceCents)}',
+              style: muted,
+            ),
+          ],
+        ],
       ),
     );
   }

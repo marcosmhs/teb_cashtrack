@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
-import '../controllers/auth_controller.dart';
-import 'home_view.dart';
 
+import '../controllers/auth_controller.dart';
+import '../theme.dart';
+import '../widgets/common.dart';
+import '../widgets/dialogs.dart';
+
+/// Tela de login/cadastro. Após autenticar, o [AuthGate] troca para o app automaticamente.
 class LoginView extends StatefulWidget {
   const LoginView({super.key});
 
@@ -10,66 +14,13 @@ class LoginView extends StatefulWidget {
 }
 
 class _LoginViewState extends State<LoginView> {
-  final AuthController _authController = AuthController();
-  final TextEditingController _emailController = TextEditingController();
-  final TextEditingController _passwordController = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+  final _authController = AuthController();
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
   bool _loading = false;
+  bool _obscure = true;
   String? _errorMessage;
-
-  @override
-  void initState() {
-    super.initState();
-    _tryAutoLogin();
-  }
-
-  Future<void> _tryAutoLogin() async {
-    setState(() => _loading = true);
-    try {
-      final user = await _authController.tryAutoLogin();
-      if (user != null && mounted) {
-        _goToHome();
-        return;
-      }
-      if (mounted) {
-        setState(() => _loading = false);
-      }
-    } finally {
-      setState(() => _loading = false);
-    }
-  }
-
-  Future<void> _goToHome() async {
-    if (!mounted) return;
-    Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const HomeView()));
-  }
-
-  Future<void> _authenticate({required bool createAccount}) async {
-    final email = _emailController.text.trim();
-    final password = _passwordController.text;
-    if (email.isEmpty || password.isEmpty) {
-      setState(() => _errorMessage = 'Informe e-mail e senha.');
-      return;
-    }
-
-    setState(() {
-      _loading = true;
-      _errorMessage = null;
-    });
-
-    try {
-      if (createAccount) {
-        await _authController.signUp(email, password);
-      } else {
-        await _authController.signIn(email, password);
-      }
-      _goToHome();
-    } catch (error) {
-      setState(() {
-        _loading = false;
-        _errorMessage = error is Exception ? error.toString() : 'Erro ao autenticar.';
-      });
-    }
-  }
 
   @override
   void dispose() {
@@ -78,89 +29,135 @@ class _LoginViewState extends State<LoginView> {
     super.dispose();
   }
 
+  Future<void> _authenticate({required bool createAccount}) async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() {
+      _loading = true;
+      _errorMessage = null;
+    });
+    try {
+      final email = _emailController.text;
+      final password = _passwordController.text;
+      if (createAccount) {
+        await _authController.signUp(email, password);
+      } else {
+        await _authController.signIn(email, password);
+      }
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _errorMessage = AuthController.describeError(error);
+      });
+    }
+  }
+
+  Future<void> _resetPassword() async {
+    final email = _emailController.text.trim();
+    if (email.isEmpty) {
+      setState(() => _errorMessage = 'Informe seu e-mail para redefinir a senha.');
+      return;
+    }
+    try {
+      await _authController.sendPasswordReset(email);
+      if (mounted) showMessage(context, 'Enviamos um link de redefinição para $email.');
+    } catch (error) {
+      if (mounted) setState(() => _errorMessage = AuthController.describeError(error));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Theme.of(context).colorScheme.surface,
       body: Center(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 420),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const SizedBox(height: 56),
-                Text(
-                  'CashTrack',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.headlineLarge?.copyWith(fontWeight: FontWeight.w800),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  'Acesse sua conta para acompanhar lançamentos e cartões.',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodyLarge?.copyWith(color: Theme.of(context).colorScheme.secondary),
-                ),
-                const SizedBox(height: 36),
-                TextField(
-                  controller: _emailController,
-                  decoration: const InputDecoration(
-                    labelText: 'E-mail',
-                    border: OutlineInputBorder(),
-                  ),
-                  keyboardType: TextInputType.emailAddress,
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: _passwordController,
-                  decoration: const InputDecoration(
-                    labelText: 'Senha',
-                    border: OutlineInputBorder(),
-                  ),
-                  obscureText: true,
-                ),
-                const SizedBox(height: 18),
-                if (_errorMessage != null) ...[
-                  Text(
-                    _errorMessage!,
-                    style: TextStyle(color: Theme.of(context).colorScheme.error),
-                  ),
-                  const SizedBox(height: 12),
-                ],
-                FilledButton(
-                  onPressed: _loading ? null : () => _authenticate(createAccount: false),
-                  child: _loading
-                      ? SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(
-                            color: Theme.of(context).colorScheme.onPrimary,
-                            strokeWidth: 2,
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: ResponsiveBody(
+            maxWidth: 420,
+            child: AutofillGroup(
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Icon(Icons.account_balance_wallet, size: 56, color: context.colors.primary),
+                    const SizedBox(height: AppSpacing.md),
+                    Text(
+                      'CashTrack',
+                      textAlign: TextAlign.center,
+                      style: context.text.headlineLarge?.copyWith(fontWeight: FontWeight.w800),
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      'Acompanhe contas, cartões e lançamentos.',
+                      textAlign: TextAlign.center,
+                      style: context.text.bodyLarge?.copyWith(
+                        color: context.colors.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.xl),
+                    TextFormField(
+                      controller: _emailController,
+                      keyboardType: TextInputType.emailAddress,
+                      autofillHints: const [AutofillHints.email],
+                      textInputAction: TextInputAction.next,
+                      decoration: const InputDecoration(
+                        labelText: 'E-mail',
+                        prefixIcon: Icon(Icons.mail_outline),
+                      ),
+                      validator: (v) => (v ?? '').contains('@') ? null : 'Informe um e-mail válido',
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    TextFormField(
+                      controller: _passwordController,
+                      obscureText: _obscure,
+                      autofillHints: const [AutofillHints.password],
+                      onFieldSubmitted: (_) => _authenticate(createAccount: false),
+                      decoration: InputDecoration(
+                        labelText: 'Senha',
+                        prefixIcon: const Icon(Icons.lock_outline),
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            _obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined,
                           ),
-                        )
-                      : const Text('Entrar'),
+                          tooltip: _obscure ? 'Mostrar senha' : 'Ocultar senha',
+                          onPressed: () => setState(() => _obscure = !_obscure),
+                        ),
+                      ),
+                      validator: (v) => (v ?? '').isEmpty ? 'Informe a senha' : null,
+                    ),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton(
+                        onPressed: _loading ? null : _resetPassword,
+                        child: const Text('Esqueci minha senha'),
+                      ),
+                    ),
+                    if (_errorMessage != null) ...[
+                      Text(
+                        _errorMessage!,
+                        style: context.text.bodyMedium?.copyWith(color: context.colors.error),
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                    ],
+                    FilledButton(
+                      onPressed: _loading ? null : () => _authenticate(createAccount: false),
+                      child: _loading
+                          ? const SizedBox.square(
+                              dimension: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Text('Entrar'),
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    OutlinedButton(
+                      onPressed: _loading ? null : () => _authenticate(createAccount: true),
+                      child: const Text('Criar conta'),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 12),
-                OutlinedButton(
-                  onPressed: _loading ? null : () => _authenticate(createAccount: true),
-                  child: const Text('Criar conta'),
-                ),
-                const SizedBox(height: 24),
-                Text(
-                  'Os dados de login são armazenados localmente para reinício automático na próxima abertura do app.',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.labelSmall?.copyWith(color: Theme.of(context).colorScheme.secondary),
-                ),
-                const SizedBox(height: 56),
-              ],
+              ),
             ),
           ),
         ),

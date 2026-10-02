@@ -1,127 +1,107 @@
-// ignore_for_file: use_build_context_synchronously
-
 import 'package:flutter/material.dart';
+
 import '../controllers/tag_controller.dart';
 import '../models/tag.dart';
+import '../theme.dart';
+import '../widgets/common.dart';
+import '../widgets/dialogs.dart';
 
 class TagListView extends StatefulWidget {
-  final bool forSelection;
-  const TagListView({super.key, this.forSelection = false});
+  const TagListView({super.key});
 
   @override
   State<TagListView> createState() => _TagListViewState();
 }
 
 class _TagListViewState extends State<TagListView> {
-  final TagController _tagController = TagController();
+  final _tagController = TagController();
+  late final Stream<List<Tag>> _tags = _tagController.getTags();
 
-  Future<void> _showAddEditDialog({Tag? tag}) async {
-    final controller = TextEditingController(text: tag?.name ?? '');
-    final isEdit = tag != null;
-    final res = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: Text(isEdit ? 'Editar tag' : 'Nova tag'),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(labelText: 'Nome'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () async {
-              final name = controller.text.trim();
-              if (name.isEmpty) return;
-              if (isEdit) {
-                await _tagController.updateTag(Tag(id: tag.id, name: name));
-              } else {
-                final id = DateTime.now().millisecondsSinceEpoch.toString();
-                await _tagController.addTag(Tag(id: id, name: name));
-              }
-              Navigator.of(context).pop(true);
-            },
-            child: const Text('Salvar'),
-          ),
-        ],
-      ),
+  Future<void> _edit([Tag? tag]) async {
+    final name = await promptText(
+      context,
+      title: tag == null ? 'Nova tag' : 'Editar tag',
+      label: 'Nome',
+      initialValue: tag?.name ?? '',
     );
-    if (res == true) setState(() {});
+    if (name == null) return;
+    try {
+      await _tagController.saveTag(Tag(id: tag?.id ?? _tagController.newId(), name: name));
+    } catch (e) {
+      debugPrint('Erro ao salvar tag: $e');
+      if (mounted) showMessage(context, 'Não foi possível salvar a tag.');
+    }
+  }
+
+  Future<void> _delete(Tag tag) async {
+    final confirmed = await confirmAction(
+      context,
+      title: 'Excluir tag?',
+      message: 'A tag "${tag.name}" será removida dos lançamentos que a utilizam.',
+      confirmLabel: 'Excluir',
+      destructive: true,
+    );
+    if (!confirmed) return;
+    try {
+      await _tagController.deleteTag(tag.id);
+      if (mounted) showMessage(context, 'Tag excluída.');
+    } catch (e) {
+      debugPrint('Erro ao excluir tag: $e');
+      if (mounted) showMessage(context, 'Não foi possível excluir a tag.');
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.forSelection ? 'Selecione uma tag' : 'Tags'),
-        backgroundColor: Colors.white,
-        elevation: 0,
+      appBar: AppBar(title: const Text('Tags')),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _edit,
+        icon: const Icon(Icons.add),
+        label: const Text('Nova tag'),
       ),
       body: StreamBuilder<List<Tag>>(
-        stream: _tagController.getTags(),
+        stream: _tags,
         builder: (context, snapshot) {
-          final tags = snapshot.data ?? [];
+          if (snapshot.hasError) return ErrorView(error: snapshot.error);
+          final tags = snapshot.data;
+          if (tags == null) return const LoadingView();
           if (tags.isEmpty) {
-            return Center(
-              child: Text(
-                widget.forSelection ? 'Nenhuma tag disponível.' : 'Nenhuma tag cadastrada.',
-              ),
+            return const EmptyState(
+              icon: Icons.label_outline,
+              title: 'Nenhuma tag cadastrada.',
+              message: 'Tags ajudam a agrupar lançamentos, como "Mercado" ou "Transporte".',
             );
           }
-          return ListView.separated(
-            itemCount: tags.length,
-            separatorBuilder: (_, __) => const Divider(height: 0),
-            itemBuilder: (context, i) {
-              final tag = tags[i];
-              return ListTile(
-                title: Text(tag.name),
-                onTap: () {
-                  if (widget.forSelection) {
-                    Navigator.of(context).pop(tag);
-                  } else {
-                    _showAddEditDialog(tag: tag);
-                  }
-                },
-                trailing: widget.forSelection
-                    ? null
-                    : IconButton(
-                        icon: const Icon(Icons.delete, color: Color(0xFFEF4444)),
-                        onPressed: () async {
-                          final ok = await showDialog<bool>(
-                            context: context,
-                            builder: (_) => AlertDialog(
-                              title: const Text('Excluir tag?'),
-                              content: Text(
-                                'Excluir "${tag.name}"? Esta ação não pode ser desfeita.',
-                              ),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => Navigator.of(context).pop(false),
-                                  child: const Text('Cancelar'),
-                                ),
-                                FilledButton(
-                                  onPressed: () => Navigator.of(context).pop(true),
-                                  child: const Text('Excluir'),
-                                ),
-                              ],
-                            ),
-                          );
-                          if (ok == true) await _tagController.deleteTag(tag.id);
-                        },
-                      ),
-              );
-            },
+          return ResponsiveBody(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.xs, AppSpacing.md, 96),
+              children: [
+                Card(
+                  clipBehavior: Clip.antiAlias,
+                  child: Column(
+                    children: [
+                      for (final (i, tag) in tags.indexed) ...[
+                        if (i > 0) const Divider(),
+                        ListTile(
+                          leading: const Icon(Icons.label_outline),
+                          title: Text(tag.name),
+                          onTap: () => _edit(tag),
+                          trailing: IconButton(
+                            icon: Icon(Icons.delete_outline, color: context.colors.error),
+                            tooltip: 'Excluir ${tag.name}',
+                            onPressed: () => _delete(tag),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
           );
         },
       ),
-      floatingActionButton: widget.forSelection
-          ? null
-          : FloatingActionButton(
-              onPressed: () => _showAddEditDialog(),
-              child: const Icon(Icons.add),
-            ),
     );
   }
 }
