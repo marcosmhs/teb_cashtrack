@@ -121,84 +121,124 @@ class _TransactionFormState extends State<TransactionForm> {
 
   @override
   Widget build(BuildContext context) {
-    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+    final media = MediaQuery.of(context);
+    final bottomInset = media.viewInsets.bottom;
+    // Cabeçalho e campos rolam no meio; as tags e o botão de salvar ficam
+    // fixos no rodapé (acima do teclado), sempre visíveis — evita rolar ou
+    // fechar o teclado no celular para confirmar o lançamento.
+    final maxHeight = media.size.height * 0.92 - bottomInset;
     return Padding(
-      padding: EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.lg + bottomInset),
-      child: Form(
-        key: _formKey,
-        child: SingleChildScrollView(
+      padding: EdgeInsets.only(bottom: bottomInset),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: maxHeight > 0 ? maxHeight : media.size.height * 0.92,
+        ),
+        child: Form(
+          key: _formKey,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      _isEditing ? 'Editar lançamento' : 'Novo lançamento',
-                      style: context.text.titleLarge,
+              Padding(
+                padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, 0),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        _isEditing ? 'Editar lançamento' : 'Novo lançamento',
+                        style: context.text.titleLarge,
+                      ),
                     ),
+                    if (_isEditing)
+                      IconButton(
+                        onPressed: _saving ? null : _delete,
+                        icon: Icon(Icons.delete_outline, color: context.colors.error),
+                        tooltip: 'Excluir lançamento',
+                      ),
+                  ],
+                ),
+              ),
+              Flexible(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.md, AppSpacing.lg, 0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SegmentedButton<TransactionType>(
+                        segments: [
+                          ButtonSegment(
+                            value: TransactionType.debit,
+                            label: const Text('Despesa'),
+                            icon: Icon(Icons.arrow_downward, color: context.finance.expense),
+                          ),
+                          ButtonSegment(
+                            value: TransactionType.credit,
+                            label: const Text('Receita'),
+                            icon: Icon(Icons.arrow_upward, color: context.finance.income),
+                          ),
+                        ],
+                        selected: {_type},
+                        onSelectionChanged: (s) => setState(() => _type = s.first),
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                      TextFormField(
+                        controller: _amountController,
+                        autofocus: !_isEditing,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: const [CurrencyInputFormatter()],
+                        style: context.text.headlineMedium,
+                        decoration: const InputDecoration(labelText: 'Valor', prefixText: r'R$ '),
+                        validator: (v) =>
+                            parseCurrencyToCents(v ?? '') <= 0 ? 'Informe um valor' : null,
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                      _buildAccountField(),
+                      const SizedBox(height: AppSpacing.md),
+                      DateField(
+                        label: 'Data',
+                        value: _date,
+                        onChanged: (d) => setState(() => _date = d),
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                      TextFormField(
+                        controller: _detailsController,
+                        textCapitalization: TextCapitalization.sentences,
+                        decoration: const InputDecoration(labelText: 'Descrição (opcional)'),
+                      ),
+                    ],
                   ),
-                  if (_isEditing)
-                    IconButton(
-                      onPressed: _saving ? null : _delete,
-                      icon: Icon(Icons.delete_outline, color: context.colors.error),
-                      tooltip: 'Excluir lançamento',
-                    ),
-                ],
+                ),
               ),
-              const SizedBox(height: AppSpacing.md),
-              SegmentedButton<TransactionType>(
-                segments: [
-                  ButtonSegment(
-                    value: TransactionType.debit,
-                    label: const Text('Despesa'),
-                    icon: Icon(Icons.arrow_downward, color: context.finance.expense),
-                  ),
-                  ButtonSegment(
-                    value: TransactionType.credit,
-                    label: const Text('Receita'),
-                    icon: Icon(Icons.arrow_upward, color: context.finance.income),
-                  ),
-                ],
-                selected: {_type},
-                onSelectionChanged: (s) => setState(() => _type = s.first),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              TextFormField(
-                controller: _amountController,
-                autofocus: !_isEditing,
-                keyboardType: TextInputType.number,
-                inputFormatters: const [CurrencyInputFormatter()],
-                style: context.text.headlineMedium,
-                decoration: const InputDecoration(labelText: 'Valor', prefixText: r'R$ '),
-                validator: (v) => parseCurrencyToCents(v ?? '') <= 0 ? 'Informe um valor' : null,
-              ),
-              const SizedBox(height: AppSpacing.md),
-              _buildAccountField(),
-              const SizedBox(height: AppSpacing.md),
-              DateField(label: 'Data', value: _date, onChanged: (d) => setState(() => _date = d)),
-              const SizedBox(height: AppSpacing.md),
-              TextFormField(
-                controller: _detailsController,
-                textCapitalization: TextCapitalization.sentences,
-                decoration: const InputDecoration(labelText: 'Descrição (opcional)'),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              _buildTagSelector(),
-              const SizedBox(height: AppSpacing.lg),
-              FilledButton(
-                onPressed: _saving ? null : _save,
-                child: _saving
-                    ? const SizedBox.square(
-                        dimension: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : Text(_isEditing ? 'Salvar alterações' : 'Salvar lançamento'),
-              ),
+              _buildFooter(),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildFooter() {
+    return Container(
+      decoration: BoxDecoration(
+        border: Border(top: BorderSide(color: context.colors.outlineVariant)),
+      ),
+      padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildTagSelector(),
+          FilledButton(
+            onPressed: _saving ? null : _save,
+            child: _saving
+                ? const SizedBox.square(
+                    dimension: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Text(_isEditing ? 'Salvar alterações' : 'Salvar lançamento'),
+          ),
+        ],
       ),
     );
   }
@@ -267,23 +307,32 @@ class _TransactionFormState extends State<TransactionForm> {
           children: [
             Text('Tag', style: context.text.labelMedium),
             const SizedBox(height: AppSpacing.xs),
-            Wrap(
-              spacing: AppSpacing.xs,
-              runSpacing: AppSpacing.xs,
-              children: [
-                ChoiceChip(
-                  label: const Text('Sem tag'),
-                  selected: _tagId == null,
-                  onSelected: (_) => setState(() => _tagId = null),
+            // Altura limitada com rolagem própria: muitas tags não empurram
+            // o botão de salvar para fora da tela.
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 132),
+              child: SingleChildScrollView(
+                child: Wrap(
+                  spacing: AppSpacing.xs,
+                  runSpacing: AppSpacing.xs,
+                  children: [
+                    ChoiceChip(
+                      label: const Text('Sem tag'),
+                      selected: _tagId == null,
+                      onSelected: (_) => setState(() => _tagId = null),
+                    ),
+                    for (final tag in tags)
+                      ChoiceChip(
+                        label: Text(tag.name),
+                        selected: _tagId == tag.id,
+                        onSelected: (selected) =>
+                            setState(() => _tagId = selected ? tag.id : null),
+                      ),
+                  ],
                 ),
-                for (final tag in tags)
-                  ChoiceChip(
-                    label: Text(tag.name),
-                    selected: _tagId == tag.id,
-                    onSelected: (selected) => setState(() => _tagId = selected ? tag.id : null),
-                  ),
-              ],
+              ),
             ),
+            const SizedBox(height: AppSpacing.md),
           ],
         );
       },
