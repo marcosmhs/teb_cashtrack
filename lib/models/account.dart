@@ -43,6 +43,10 @@ class Account {
   /// Apenas uma conta do usuário fica marcada (ver [AccountController.saveAccount]).
   final bool isDefault;
 
+  /// Texto que identifica esta conta nas notificações de pagamento (Android),
+  /// normalmente os 4 últimos dígitos do cartão. Usado no lançamento automático.
+  final String? notificationMatch;
+
   const Account({
     required this.id,
     required this.name,
@@ -52,6 +56,7 @@ class Account {
     required this.createdAt,
     this.closingDay,
     this.isDefault = false,
+    this.notificationMatch,
   });
 
   bool get isCreditCard => type == AccountType.creditCard;
@@ -65,6 +70,7 @@ class Account {
       'createdAt': Timestamp.fromDate(createdAt),
       'closingDay': isCreditCard ? closingDay : null,
       'isDefault': isDefault,
+      'notificationMatch': notificationMatch,
     };
   }
 
@@ -79,6 +85,7 @@ class Account {
       createdAt: parseDate(map['createdAt']),
       closingDay: closingDay != null && closingDay >= 1 && closingDay <= 31 ? closingDay : null,
       isDefault: map['isDefault'] as bool? ?? false,
+      notificationMatch: nonEmptyString(map['notificationMatch'])?.trim(),
     );
   }
 }

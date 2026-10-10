@@ -13,6 +13,8 @@ import '../utils/format.dart';
 import '../widgets/common.dart';
 import '../widgets/transaction_form.dart';
 import '../widgets/transaction_tile.dart';
+import '../services/notification_capture_service.dart';
+import 'notification_settings_view.dart';
 import 'transaction_filter_view.dart';
 import 'transaction_statement_view.dart';
 import 'user_edit_view.dart';
@@ -36,6 +38,32 @@ class HomeView extends StatefulWidget {
 class _HomeViewState extends State<HomeView> {
   // Um único stream combinado, criado uma vez: evita assinaturas duplicadas
   // e o "piscar" de carregamento a cada reconstrução.
+  /// No Android, indica se o lançamento automático ainda precisa de permissão.
+  bool _notificationAccessPending = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkNotificationAccess();
+  }
+
+  Future<void> _checkNotificationAccess() async {
+    if (!NotificationCaptureService.isSupported) return;
+    try {
+      final status = await NotificationCaptureService().getStatus();
+      if (mounted) setState(() => _notificationAccessPending = !status.permissionGranted);
+    } catch (e) {
+      debugPrint('Erro ao verificar acesso às notificações: $e');
+    }
+  }
+
+  Future<void> _openNotificationSettings() async {
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const NotificationSettingsView()));
+    _checkNotificationAccess();
+  }
+
   late final Stream<_HomeData> _data = Rx.combineLatest3(
     AccountController().getAccounts(),
     TransactionController().getTransactions(),
@@ -68,6 +96,12 @@ class _HomeViewState extends State<HomeView> {
       appBar: AppBar(
         title: Text('CashTrack', style: context.text.headlineMedium),
         actions: [
+          if (NotificationCaptureService.isSupported)
+            IconButton(
+              icon: const Icon(Icons.bolt_outlined),
+              tooltip: 'Lançamento automático',
+              onPressed: _openNotificationSettings,
+            ),
           IconButton(
             icon: const Icon(Icons.search),
             tooltip: 'Buscar lançamentos',
@@ -121,6 +155,21 @@ class _HomeViewState extends State<HomeView> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            if (_notificationAccessPending) ...[
+              Card(
+                color: context.colors.secondaryContainer,
+                child: ListTile(
+                  leading: const Icon(Icons.bolt),
+                  title: const Text('Ative o lançamento automático'),
+                  subtitle: const Text(
+                    'Crie lançamentos a partir das notificações do Samsung Wallet.',
+                  ),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: _openNotificationSettings,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+            ],
             LayoutBuilder(
               builder: (context, constraints) {
                 final balance = _buildBalanceCard(otherAccounts, data.transactions);

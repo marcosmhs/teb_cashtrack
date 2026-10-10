@@ -15,6 +15,9 @@ class UserCollections {
   static const shoppingItems = 'shopping_items';
   static const shoppingPurchaseLists = 'shopping_purchase_lists';
 
+  /// Notificações de pagamento capturadas no Android (gravadas pelo serviço nativo).
+  static const notificationCaptures = 'notification_captures';
+
   static const all = [
     accounts,
     transactions,

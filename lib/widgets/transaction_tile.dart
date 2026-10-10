@@ -24,7 +24,11 @@ class TransactionTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = transaction;
     final finance = context.finance;
-    final subtitle = [formatDate(t.date), ?accountName].join(' • ');
+    final subtitle = [
+      formatDate(t.date),
+      ?accountName,
+      if (t.isAutomatic) 'automático',
+    ].join(' • ');
 
     return InkWell(
       onTap: onTap,

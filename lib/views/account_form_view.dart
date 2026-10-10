@@ -22,6 +22,7 @@ class _AccountFormViewState extends State<AccountFormView> {
   final _nameController = TextEditingController();
   final _balanceController = TextEditingController();
   final _closingDayController = TextEditingController();
+  final _notificationMatchController = TextEditingController();
   final _accountController = AccountController();
 
   AccountType _type = AccountType.checking;
@@ -41,6 +42,7 @@ class _AccountFormViewState extends State<AccountFormView> {
       _balanceController.text = centsToInputText(account.initialBalanceCents.abs());
       _negativeBalance = account.initialBalanceCents < 0;
       _closingDayController.text = account.closingDay?.toString() ?? '';
+      _notificationMatchController.text = account.notificationMatch ?? '';
       _type = account.type;
       _active = account.active;
       _isDefault = account.isDefault;
@@ -52,6 +54,7 @@ class _AccountFormViewState extends State<AccountFormView> {
     _nameController.dispose();
     _balanceController.dispose();
     _closingDayController.dispose();
+    _notificationMatchController.dispose();
     super.dispose();
   }
 
@@ -70,6 +73,9 @@ class _AccountFormViewState extends State<AccountFormView> {
       closingDay: int.tryParse(_closingDayController.text),
       // Conta inativa não pode ser o meio de pagamento principal.
       isDefault: _isDefault && _active,
+      notificationMatch: _notificationMatchController.text.trim().isEmpty
+          ? null
+          : _notificationMatchController.text.trim(),
     );
 
     try {
@@ -176,6 +182,18 @@ class _AccountFormViewState extends State<AccountFormView> {
                     ],
                     selected: {_type},
                     onSelectionChanged: (s) => setState(() => _type = s.first),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  TextFormField(
+                    controller: _notificationMatchController,
+                    decoration: const InputDecoration(
+                      labelText: 'Identificador nas notificações (opcional)',
+                      hintText: 'Ex.: 1234',
+                      helperText:
+                          'Final do cartão ou nome que aparece nas notificações de pagamento. '
+                          'Usado pelo lançamento automático no Android.',
+                      helperMaxLines: 3,
+                    ),
                   ),
                   const SizedBox(height: AppSpacing.md),
                   if (_type == AccountType.creditCard)
