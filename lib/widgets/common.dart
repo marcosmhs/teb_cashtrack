@@ -45,6 +45,9 @@ class ResponsiveBody extends StatelessWidget {
   Widget build(BuildContext context) {
     return Align(
       alignment: Alignment.topCenter,
+      // Altura igual à do filho: sem isso, em áreas com altura livre (ex.: barra
+      // inferior do Scaffold) o Align ocupa toda a tela e esconde o corpo.
+      heightFactor: 1,
       child: ConstrainedBox(
         constraints: BoxConstraints(maxWidth: maxWidth),
         child: child,
