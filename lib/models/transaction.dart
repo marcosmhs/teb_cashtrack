@@ -31,6 +31,10 @@ class Transaction {
   final String? tagId;
   final TransactionType type;
 
+  /// Origem do lançamento: `null` = manual; `notification` = criado a partir de
+  /// uma notificação de pagamento (Android).
+  final String? source;
+
   const Transaction({
     required this.id,
     required this.date,
@@ -39,7 +43,12 @@ class Transaction {
     this.details,
     this.tagId,
     required this.type,
+    this.source,
   });
+
+  static const sourceNotification = 'notification';
+
+  bool get isAutomatic => source == sourceNotification;
 
   bool get isDebit => type == TransactionType.debit;
 
@@ -58,6 +67,7 @@ class Transaction {
       details: details,
       tagId: clearTag ? null : (tagId ?? this.tagId),
       type: type,
+      source: source,
     );
   }
 
@@ -69,6 +79,7 @@ class Transaction {
       'details': details,
       'tagId': tagId,
       'type': type.storageKey,
+      'source': source,
     };
   }
 
@@ -81,6 +92,7 @@ class Transaction {
       details: nonEmptyString(map['details']),
       tagId: nonEmptyString(map['tagId']),
       type: TransactionType.parse(map['type']),
+      source: nonEmptyString(map['source']),
     );
   }
 }
