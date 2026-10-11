@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:rxdart/rxdart.dart';
 
 import '../controllers/account_controller.dart';
 import '../controllers/tag_controller.dart';
@@ -6,6 +7,7 @@ import '../controllers/transaction_controller.dart';
 import '../models/account.dart';
 import '../models/tag.dart';
 import '../models/transaction.dart';
+import '../services/tag_stats.dart';
 import '../theme.dart';
 import '../utils/format.dart';
 import 'common.dart';
@@ -58,7 +60,16 @@ class _TransactionFormState extends State<TransactionForm> {
   final _detailsController = TextEditingController();
 
   late final Stream<List<Account>> _accounts = AccountController().getAccounts();
-  late final Stream<List<Tag>> _tags = TagController().getTags();
+
+  /// Tags ordenadas pelo uso nos últimos 30 dias (mais usadas primeiro).
+  late final Stream<List<Tag>> _tags = Rx.combineLatest2(
+    TagController().getTags(),
+    _txController.getTransactionsInRange(
+      from: DateTime.now().subtract(const Duration(days: TagStats.recentUsageDays)),
+    ),
+    (List<Tag> tags, List<Transaction> recent) =>
+        TagStats.sortByRecentUsage(tags, recent, DateTime.now()),
+  );
 
   late DateTime _date;
   late TransactionType _type;
