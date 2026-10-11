@@ -229,6 +229,7 @@ class _TagSpendingViewState extends State<TagSpendingView> {
 /// Linha do ranking: nome, valor, participação e barra proporcional.
 class TagBarRow extends StatelessWidget {
   const TagBarRow({
+    super.key,
     required this.label,
     required this.total,
     required this.fraction,
