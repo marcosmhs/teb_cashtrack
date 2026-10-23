@@ -5,6 +5,7 @@ import '../models/tag.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import '../widgets/dialogs.dart';
+import 'tag_spending_view.dart';
 
 class TagListView extends StatefulWidget {
   const TagListView({super.key});
@@ -54,7 +55,18 @@ class _TagListViewState extends State<TagListView> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Tags')),
+      appBar: AppBar(
+        title: const Text('Tags'),
+        actions: [
+          TextButton.icon(
+            onPressed: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const TagSpendingView())),
+            icon: const Icon(Icons.insights_outlined),
+            label: const Text('Gastos por tag'),
+          ),
+        ],
+      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _edit,
         icon: const Icon(Icons.add),

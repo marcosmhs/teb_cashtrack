@@ -15,6 +15,7 @@ import '../widgets/transaction_form.dart';
 import '../widgets/transaction_tile.dart';
 import '../services/notification_capture_service.dart';
 import 'notification_settings_view.dart';
+import 'tag_spending_view.dart';
 import 'transaction_filter_view.dart';
 import 'transaction_statement_view.dart';
 import 'user_edit_view.dart';
@@ -102,6 +103,13 @@ class _HomeViewState extends State<HomeView> {
               tooltip: 'Lançamento automático',
               onPressed: _openNotificationSettings,
             ),
+          IconButton(
+            icon: const Icon(Icons.insights_outlined),
+            tooltip: 'Gastos por tag',
+            onPressed: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const TagSpendingView())),
+          ),
           IconButton(
             icon: const Icon(Icons.search),
             tooltip: 'Buscar lançamentos',
