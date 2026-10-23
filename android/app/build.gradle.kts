@@ -16,7 +16,8 @@ val keystoreProperties = Properties().apply {
 
 android {
     namespace = "br.com.thatexoticbug.teb_cashtrack"
-    compileSdk = flutter.compileSdkVersion
+    // O Google Play exige targetSdk 36 (Android 16) desde 31/08/2026; o Flutter 3.32 usa 35.
+    compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
@@ -32,7 +33,7 @@ android {
         applicationId = "br.com.thatexoticbug.teb_cashtrack"
         // Exigido pelo firebase_auth.
         minSdk = 23
-        targetSdk = flutter.targetSdkVersion
+        targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }

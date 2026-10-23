@@ -33,7 +33,9 @@ typedef MonitoredApp = ({String package, String name});
 
 /// Ponte com o serviço nativo de notificações (`MainActivity.kt`).
 class NotificationCaptureService {
-  static const _channel = MethodChannel('br.com.thatexoticbug.cashtrack/notifications');
+  /// Deve ser igual a `MainActivity.CHANNEL` (ver test/native_contract_test.dart).
+  static const channelName = 'br.com.thatexoticbug.cashtrack/notifications';
+  static const _channel = MethodChannel(channelName);
 
   static const samsungWallet = 'com.samsung.android.spay';
 
@@ -78,6 +80,6 @@ class NotificationCaptureService {
   Future<void> openNotificationAccessSettings() =>
       _channel.invokeMethod('openNotificationAccessSettings');
 
-  Future<void> requestIgnoreBatteryOptimizations() =>
-      _channel.invokeMethod('requestIgnoreBatteryOptimizations');
+  /// Abre os ajustes do app no Android, onde o usuário libera o uso de bateria.
+  Future<void> openBatterySettings() => _channel.invokeMethod('openBatterySettings');
 }

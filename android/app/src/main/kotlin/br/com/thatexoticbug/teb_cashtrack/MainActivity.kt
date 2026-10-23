@@ -1,6 +1,5 @@
 package br.com.thatexoticbug.teb_cashtrack
 
-import android.annotation.SuppressLint
 import android.content.ComponentName
 import android.content.Intent
 import android.net.Uri
@@ -36,8 +35,8 @@ class MainActivity : FlutterActivity() {
                     startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
                     result.success(null)
                 }
-                "requestIgnoreBatteryOptimizations" -> {
-                    requestIgnoreBatteryOptimizations()
+                "openBatterySettings" -> {
+                    openBatterySettings()
                     result.success(null)
                 }
                 else -> result.notImplemented()
@@ -61,9 +60,12 @@ class MainActivity : FlutterActivity() {
     private fun isIgnoringBatteryOptimizations(): Boolean =
         (getSystemService(POWER_SERVICE) as PowerManager).isIgnoringBatteryOptimizations(packageName)
 
-    @SuppressLint("BatteryLife")
-    private fun requestIgnoreBatteryOptimizations() {
-        val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+    /**
+     * Abre os ajustes do app, onde o usuário escolhe Bateria > "Sem restrições".
+     * O pedido direto (REQUEST_IGNORE_BATTERY_OPTIMIZATIONS) é restrito pelo Google Play.
+     */
+    private fun openBatterySettings() {
+        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
             .setData(Uri.parse("package:$packageName"))
         try {
             startActivity(intent)
@@ -73,6 +75,7 @@ class MainActivity : FlutterActivity() {
     }
 
     companion object {
+        /** Igual a `NotificationCaptureService.channelName` (test/native_contract_test.dart). */
         const val CHANNEL = "br.com.thatexoticbug.cashtrack/notifications"
     }
 }
