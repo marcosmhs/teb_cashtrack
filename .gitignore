@@ -94,3 +94,9 @@ credentials.json
 
 # Editor / IDE settings (opcional: descomente se desejar ignorar)
 # .vscode/
+
+# Android: configuração do Firebase e assinatura (não versionar)
+android/app/google-services.json
+android/key.properties
+android/*.jks
+android/app/*.jks

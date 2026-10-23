@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/intl.dart';
@@ -13,7 +14,13 @@ import 'package:teb_cashtrack/widgets/common.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   Intl.defaultLocale = 'pt_BR';
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  // No Android o Firebase nativo já é configurado pelo google-services.json (o serviço de
+  // notificações depende dele); usar o mesmo app padrão evita conflito de configuração.
+  await Firebase.initializeApp(
+    options: defaultTargetPlatform == TargetPlatform.android && !kIsWeb
+        ? null
+        : DefaultFirebaseOptions.currentPlatform,
+  );
   runApp(const Cashtrack());
 }
 

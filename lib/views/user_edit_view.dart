@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../controllers/auth_controller.dart';
 import '../services/legacy_migration_service.dart';
+import '../services/notification_capture_service.dart';
+import 'notification_settings_view.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import '../widgets/dialogs.dart';
@@ -142,6 +144,22 @@ class _UserEditViewState extends State<UserEditView> {
                 ),
               ),
               const SizedBox(height: AppSpacing.md),
+              if (NotificationCaptureService.isSupported) ...[
+                Card(
+                  child: ListTile(
+                    leading: const Icon(Icons.bolt_outlined),
+                    title: const Text('Lançamento automático'),
+                    subtitle: const Text(
+                      'Criar lançamentos a partir das notificações de pagamento',
+                    ),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => Navigator.of(
+                      context,
+                    ).push(MaterialPageRoute(builder: (_) => const NotificationSettingsView())),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.md),
+              ],
               AppCard(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,

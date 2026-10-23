@@ -11,22 +11,41 @@ import '../utils/format.dart';
 import 'common.dart';
 import 'dialogs.dart';
 
+/// Valores iniciais para um novo lançamento (ex.: vindos de uma notificação capturada).
+class TransactionPrefill {
+  const TransactionPrefill({this.amountCents, this.details, this.date, this.accountId, this.type});
+
+  final int? amountCents;
+  final String? details;
+  final DateTime? date;
+  final String? accountId;
+  final TransactionType? type;
+}
+
 /// Abre o formulário de lançamento em uma folha inferior.
 /// Sem [transaction] cria um novo lançamento; com ele, edita (e permite excluir).
-Future<void> showTransactionForm(BuildContext context, {Transaction? transaction}) {
+/// [onSaved] recebe o lançamento salvo.
+Future<void> showTransactionForm(
+  BuildContext context, {
+  Transaction? transaction,
+  TransactionPrefill? prefill,
+  ValueChanged<Transaction>? onSaved,
+}) {
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
     constraints: const BoxConstraints(maxWidth: 640),
-    builder: (_) => TransactionForm(transaction: transaction),
+    builder: (_) => TransactionForm(transaction: transaction, prefill: prefill, onSaved: onSaved),
   );
 }
 
 class TransactionForm extends StatefulWidget {
-  const TransactionForm({super.key, this.transaction});
+  const TransactionForm({super.key, this.transaction, this.prefill, this.onSaved});
 
   final Transaction? transaction;
+  final TransactionPrefill? prefill;
+  final ValueChanged<Transaction>? onSaved;
 
   @override
   State<TransactionForm> createState() => _TransactionFormState();
@@ -53,14 +72,14 @@ class _TransactionFormState extends State<TransactionForm> {
   void initState() {
     super.initState();
     final t = widget.transaction;
-    _date = t?.date ?? DateTime.now();
-    _type = t?.type ?? TransactionType.debit;
-    _accountId = t?.accountId;
+    final prefill = widget.prefill;
+    _date = t?.date ?? prefill?.date ?? DateTime.now();
+    _type = t?.type ?? prefill?.type ?? TransactionType.debit;
+    _accountId = t?.accountId ?? prefill?.accountId;
     _tagId = t?.tagId;
-    if (t != null) {
-      _amountController.text = centsToInputText(t.amountCents);
-      _detailsController.text = t.details ?? '';
-    }
+    final amount = t?.amountCents ?? prefill?.amountCents;
+    if (amount != null) _amountController.text = centsToInputText(amount);
+    _detailsController.text = t?.details ?? prefill?.details ?? '';
   }
 
   @override
@@ -82,9 +101,11 @@ class _TransactionFormState extends State<TransactionForm> {
       details: details.isEmpty ? null : details,
       tagId: _tagId,
       type: _type,
+      source: widget.transaction?.source,
     );
     try {
       await _txController.saveTransaction(transaction);
+      widget.onSaved?.call(transaction);
       if (!mounted) return;
       Navigator.of(context).pop();
       showMessage(context, _isEditing ? 'Lançamento atualizado.' : 'Lançamento salvo.');
@@ -160,7 +181,12 @@ class _TransactionFormState extends State<TransactionForm> {
               ),
               Flexible(
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.md, AppSpacing.lg, 0),
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.lg,
+                    AppSpacing.md,
+                    AppSpacing.lg,
+                    0,
+                  ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     mainAxisSize: MainAxisSize.min,
@@ -223,7 +249,12 @@ class _TransactionFormState extends State<TransactionForm> {
       decoration: BoxDecoration(
         border: Border(top: BorderSide(color: context.colors.outlineVariant)),
       ),
-      padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.lg),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.lg,
+        AppSpacing.md,
+        AppSpacing.lg,
+        AppSpacing.lg,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
@@ -325,8 +356,7 @@ class _TransactionFormState extends State<TransactionForm> {
                       ChoiceChip(
                         label: Text(tag.name),
                         selected: _tagId == tag.id,
-                        onSelected: (selected) =>
-                            setState(() => _tagId = selected ? tag.id : null),
+                        onSelected: (selected) => setState(() => _tagId = selected ? tag.id : null),
                       ),
                   ],
                 ),
