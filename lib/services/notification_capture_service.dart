@@ -78,6 +78,6 @@ class NotificationCaptureService {
   Future<void> openNotificationAccessSettings() =>
       _channel.invokeMethod('openNotificationAccessSettings');
 
-  Future<void> requestIgnoreBatteryOptimizations() =>
-      _channel.invokeMethod('requestIgnoreBatteryOptimizations');
+  /// Abre os ajustes do app no Android, onde o usuário libera o uso de bateria.
+  Future<void> openBatterySettings() => _channel.invokeMethod('openBatterySettings');
 }

@@ -75,6 +75,27 @@ class _NotificationSettingsViewState extends State<NotificationSettingsView>
     await _togglePackage(package, true);
   }
 
+  /// Aviso exigido pelo Google Play antes de pedir o acesso às notificações:
+  /// explica o que é lido e guardado, e só segue com o consentimento do usuário.
+  Future<void> _requestNotificationAccess() async {
+    final agreed = await confirmAction(
+      context,
+      title: 'Acesso às notificações',
+      message:
+          'Para criar lançamentos automaticamente, o CashTrack precisa de acesso às '
+          'notificações do celular.\n\n'
+          '• O que é lido: somente as notificações dos apps marcados em "Apps monitorados" '
+          '(por padrão, o Samsung Wallet). As dos outros apps são ignoradas.\n'
+          '• O que é guardado: o texto da notificação, o valor, o estabelecimento e o final '
+          'do cartão, na sua conta do CashTrack, visíveis só para você.\n'
+          '• Para quê: criar seus lançamentos e listar as notificações capturadas.\n'
+          '• Esses dados não são vendidos nem compartilhados com terceiros.\n\n'
+          'Você pode desligar a captura ou revogar o acesso a qualquer momento.',
+      confirmLabel: 'Concordo',
+    );
+    if (agreed) await _service.openNotificationAccessSettings();
+  }
+
   void _createFromCapture(NotificationCapture capture) {
     showTransactionForm(
       context,
@@ -136,15 +157,17 @@ class _NotificationSettingsViewState extends State<NotificationSettingsView>
             okText: 'Acesso às notificações concedido',
             pendingText: 'Acesso às notificações pendente',
             actionLabel: 'Conceder',
-            onAction: _service.openNotificationAccessSettings,
+            onAction: _requestNotificationAccess,
           ),
           const SizedBox(height: AppSpacing.sm),
           _StatusRow(
             ok: status.ignoringBatteryOptimizations,
             okText: 'Sem restrição de bateria',
-            pendingText: 'O Android pode pausar o serviço para economizar bateria',
-            actionLabel: 'Liberar',
-            onAction: _service.requestIgnoreBatteryOptimizations,
+            pendingText:
+                'O Android pode pausar o serviço para economizar bateria. '
+                'Nos ajustes do app, em Bateria, escolha "Sem restrições".',
+            actionLabel: 'Ajustes',
+            onAction: _service.openBatterySettings,
           ),
         ],
       ),
