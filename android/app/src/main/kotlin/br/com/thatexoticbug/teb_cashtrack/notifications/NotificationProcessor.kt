@@ -15,6 +15,9 @@ import java.util.Locale
  * Transforma uma notificação de pagamento em lançamento no Firestore
  * (`users/{uid}/transactions`) e registra a captura em `users/{uid}/notification_captures`.
  * Usa a sessão do Firebase Auth do próprio app; sem usuário logado, nada é gravado.
+ *
+ * Coleções, campos e status gravados aqui são lidos pelo app Flutter: ao mudar algum,
+ * ajuste o lado Dart junto (test/native_contract_test.dart verifica que os dois batem).
  */
 object NotificationProcessor {
     private const val TAG = "CashTrackNotif"

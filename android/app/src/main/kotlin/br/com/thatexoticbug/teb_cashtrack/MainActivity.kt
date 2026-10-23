@@ -75,6 +75,7 @@ class MainActivity : FlutterActivity() {
     }
 
     companion object {
+        /** Igual a `NotificationCaptureService.channelName` (test/native_contract_test.dart). */
         const val CHANNEL = "br.com.thatexoticbug.cashtrack/notifications"
     }
 }
