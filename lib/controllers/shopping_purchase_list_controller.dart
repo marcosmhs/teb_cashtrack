@@ -1,3 +1,4 @@
+import '../data/local_first.dart';
 import '../data/user_collections.dart';
 import '../models/shopping_purchase_list.dart';
 
@@ -21,11 +22,9 @@ class ShoppingPurchaseListController {
     });
   }
 
-  Future<void> savePurchaseList(ShoppingPurchaseList list) async {
-    await _collection.doc(list.id).set(list.toMap());
-  }
+  Future<void> savePurchaseList(ShoppingPurchaseList list) =>
+      writeLocal(_collection.doc(list.id).set(list.toMap()), 'a lista de compras');
 
-  Future<void> deletePurchaseList(String id) async {
-    await _collection.doc(id).delete();
-  }
+  Future<void> deletePurchaseList(String id) =>
+      writeLocal(_collection.doc(id).delete(), 'a exclusão da lista');
 }

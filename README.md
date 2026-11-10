@@ -50,6 +50,26 @@ flutter build apk --release          # gera build/app/outputs/flutter-apk/app-re
 flutter install                      # instala no celular conectado por USB
 ```
 
+### Funcionamento sem internet (banco local + sincronização)
+
+O app grava e lê primeiro no banco do aparelho e sincroniza com a nuvem sozinho quando há
+conexão. Esse banco é o cache persistente do Firestore (SQLite no Android), ligado por padrão:
+
+- **Leituras**: as telas mostram os dados salvos no aparelho, com ou sem internet.
+- **Gravações**: aplicadas na hora no aparelho e enviadas quando a conexão voltar. Se o app for
+  fechado antes, elas ficam guardadas e são enviadas na próxima vez que ele (ou o serviço de
+  notificações) rodar com internet. Os controllers usam `writeLocal` (`lib/data/local_first.dart`), que
+  **não espera** a confirmação do servidor; sem isso, salvar ficaria travado sem internet.
+  Falhas de sincronização aparecem como aviso na parte de baixo da tela.
+- **Contagens** usam `get()` em vez de `count()`, porque agregações só rodam no servidor.
+- **Indicador**: na tela inicial, um ícone de nuvem aparece quando o app está sem conexão ou
+  enviando alterações (`lib/widgets/sync_status_button.dart`). Sincronizado, ele some.
+- O serviço de lançamento automático também grava no banco local quando está sem internet.
+
+Precisam de internet: o primeiro login (e entrar de novo depois de sair), criar conta, trocar
+e-mail/senha, excluir a conta e importar dados antigos. Se a mesma informação for alterada em
+dois aparelhos sem conexão, vale a última gravação que chegar ao servidor.
+
 ### Lançamento automático (notificações)
 
 Um `NotificationListenerService` nativo (`android/app/src/main/kotlin/.../notifications/`) lê as

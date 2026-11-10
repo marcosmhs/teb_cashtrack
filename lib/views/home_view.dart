@@ -11,6 +11,7 @@ import '../services/balance_calculator.dart';
 import '../theme.dart';
 import '../utils/format.dart';
 import '../widgets/common.dart';
+import '../widgets/sync_status_button.dart';
 import '../widgets/transaction_form.dart';
 import '../widgets/transaction_tile.dart';
 import '../services/notification_capture_service.dart';
@@ -97,6 +98,7 @@ class _HomeViewState extends State<HomeView> {
       appBar: AppBar(
         title: Text('CashTrack', style: context.text.headlineMedium),
         actions: [
+          const SyncStatusButton(),
           if (NotificationCaptureService.isSupported)
             IconButton(
               icon: const Icon(Icons.bolt_outlined),

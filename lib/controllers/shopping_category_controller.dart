@@ -1,3 +1,4 @@
+import '../data/local_first.dart';
 import '../data/user_collections.dart';
 import '../models/shopping_category.dart';
 
@@ -13,18 +14,18 @@ class ShoppingCategoryController {
         .map((s) => s.docs.map((d) => ShoppingCategory.fromMap(d.data(), d.id)).toList());
   }
 
-  Future<void> saveCategory(ShoppingCategory category) async {
-    await _collection.doc(category.id).set(category.toMap());
-  }
+  Future<void> saveCategory(ShoppingCategory category) =>
+      writeLocal(_collection.doc(category.id).set(category.toMap()), 'a categoria');
 
+  /// Conta pelos documentos, não por `count()`: agregações só rodam no servidor,
+  /// e esta leitura também funciona sem conexão (usa o banco do aparelho).
   Future<int> countItems(String categoryId) async {
     final result = await UserCollections.of(
       UserCollections.shoppingItems,
-    ).where('categoryId', isEqualTo: categoryId).count().get();
-    return result.count ?? 0;
+    ).where('categoryId', isEqualTo: categoryId).get();
+    return result.size;
   }
 
-  Future<void> deleteCategory(String id) async {
-    await _collection.doc(id).delete();
-  }
+  Future<void> deleteCategory(String id) =>
+      writeLocal(_collection.doc(id).delete(), 'a exclusão da categoria');
 }

@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart' show QueryDocumentSnapshot, Timestamp;
 
+import '../data/local_first.dart';
 import '../data/user_collections.dart';
 import '../models/transaction.dart';
 
@@ -36,16 +37,16 @@ class TransactionController {
     });
   }
 
+  /// Conta pelos documentos, não por `count()`: agregações só rodam no servidor,
+  /// e esta leitura também funciona sem conexão (usa o banco do aparelho).
   Future<int> countForAccount(String accountId) async {
-    final result = await _collection.where('accountId', isEqualTo: accountId).count().get();
-    return result.count ?? 0;
+    final result = await _collection.where('accountId', isEqualTo: accountId).get();
+    return result.size;
   }
 
-  Future<void> saveTransaction(Transaction transaction) async {
-    await _collection.doc(transaction.id).set(transaction.toMap());
-  }
+  Future<void> saveTransaction(Transaction transaction) =>
+      writeLocal(_collection.doc(transaction.id).set(transaction.toMap()), 'o lançamento');
 
-  Future<void> deleteTransaction(String id) async {
-    await _collection.doc(id).delete();
-  }
+  Future<void> deleteTransaction(String id) =>
+      writeLocal(_collection.doc(id).delete(), 'a exclusão do lançamento');
 }

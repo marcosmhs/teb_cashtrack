@@ -1,3 +1,4 @@
+import '../data/local_first.dart';
 import '../data/user_collections.dart';
 import '../models/notification_capture.dart';
 
@@ -13,14 +14,14 @@ class NotificationCaptureController {
         .map((s) => s.docs.map((d) => NotificationCapture.fromMap(d.data(), d.id)).toList());
   }
 
-  Future<void> markCreatedManually(String captureId, String transactionId) async {
-    await _collection.doc(captureId).update({
+  Future<void> markCreatedManually(String captureId, String transactionId) => writeLocal(
+    _collection.doc(captureId).update({
       'status': NotificationCapture.statusCreatedManually,
       'transactionId': transactionId,
-    });
-  }
+    }),
+    'a notificação',
+  );
 
-  Future<void> delete(String captureId) async {
-    await _collection.doc(captureId).delete();
-  }
+  Future<void> delete(String captureId) =>
+      writeLocal(_collection.doc(captureId).delete(), 'a exclusão da notificação');
 }
