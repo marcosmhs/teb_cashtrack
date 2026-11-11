@@ -1,7 +1,7 @@
 name: teb_cashtrack
 description: "CashTrack — controle de contas, cartões, lançamentos e lista de compras."
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
-version: 1.1.0+2
+version: 1.2.0+3
 
 environment:
   sdk: ^3.8.1
@@ -36,6 +36,6 @@ flutter_launcher_icons:
   android: true
   ios: false
   image_path: "web/icons/Icon-512.png"
-  min_sdk_android: 23
+  min_sdk_android: 24
   adaptive_icon_background: "#FFFFFF"
   adaptive_icon_foreground: "web/icons/Icon-512.png"
