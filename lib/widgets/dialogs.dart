@@ -19,6 +19,8 @@ Future<bool> confirmAction(
     builder: (dialogContext) {
       final colors = Theme.of(dialogContext).colorScheme;
       return AlertDialog(
+        // Mensagens longas (ex.: avisos de privacidade) rolam em telas pequenas.
+        scrollable: true,
         title: Text(title),
         content: Text(message),
         actions: [
@@ -50,6 +52,7 @@ Future<String?> promptText(
   required String label,
   String initialValue = '',
   String confirmLabel = 'Salvar',
+  bool obscureText = false,
 }) {
   return showDialog<String>(
     context: context,
@@ -58,6 +61,7 @@ Future<String?> promptText(
       label: label,
       initialValue: initialValue,
       confirmLabel: confirmLabel,
+      obscureText: obscureText,
     ),
   );
 }
@@ -68,12 +72,14 @@ class _PromptTextDialog extends StatefulWidget {
     required this.label,
     required this.initialValue,
     required this.confirmLabel,
+    required this.obscureText,
   });
 
   final String title;
   final String label;
   final String initialValue;
   final String confirmLabel;
+  final bool obscureText;
 
   @override
   State<_PromptTextDialog> createState() => _PromptTextDialogState();
@@ -89,7 +95,8 @@ class _PromptTextDialogState extends State<_PromptTextDialog> {
   }
 
   void _submit() {
-    final value = _controller.text.trim();
+    // Senhas podem ter espaços nas pontas.
+    final value = widget.obscureText ? _controller.text : _controller.text.trim();
     if (value.isEmpty) return;
     Navigator.of(context).pop(value);
   }
@@ -101,7 +108,10 @@ class _PromptTextDialogState extends State<_PromptTextDialog> {
       content: TextField(
         controller: _controller,
         autofocus: true,
-        textCapitalization: TextCapitalization.sentences,
+        obscureText: widget.obscureText,
+        textCapitalization: widget.obscureText
+            ? TextCapitalization.none
+            : TextCapitalization.sentences,
         decoration: InputDecoration(labelText: widget.label),
         onSubmitted: (_) => _submit(),
       ),

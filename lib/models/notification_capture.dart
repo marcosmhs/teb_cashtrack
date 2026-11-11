@@ -30,6 +30,19 @@ class NotificationCapture {
 
   static const statusCreated = 'created';
   static const statusCreatedManually = 'created_manually';
+  static const statusUnparsed = 'unparsed';
+  static const statusUnmatchedAccount = 'unmatched_account';
+  static const statusAutoDisabled = 'auto_disabled';
+  static const statusError = 'error';
+
+  /// Status gravados por `NotificationProcessor.kt` (ver test/native_contract_test.dart).
+  static const nativeStatuses = {
+    statusCreated,
+    statusUnparsed,
+    statusUnmatchedAccount,
+    statusAutoDisabled,
+    statusError,
+  };
 
   bool get hasTransaction => status == statusCreated || status == statusCreatedManually;
 
@@ -37,9 +50,9 @@ class NotificationCapture {
   String get statusLabel => switch (status) {
     statusCreated => 'Lançamento criado',
     statusCreatedManually => 'Lançado manualmente',
-    'unparsed' => 'Não reconhecida',
-    'unmatched_account' => 'Conta não identificada',
-    'auto_disabled' => 'Criação automática desligada',
+    statusUnparsed => 'Não reconhecida',
+    statusUnmatchedAccount => 'Conta não identificada',
+    statusAutoDisabled => 'Criação automática desligada',
     _ => 'Erro ao processar',
   };
 
@@ -54,7 +67,7 @@ class NotificationCapture {
       merchant: nonEmptyString(map['merchant']),
       cardHint: nonEmptyString(map['cardHint']),
       isRefund: map['isRefund'] as bool? ?? false,
-      status: map['status'] as String? ?? 'error',
+      status: map['status'] as String? ?? statusError,
       transactionId: nonEmptyString(map['transactionId']),
     );
   }

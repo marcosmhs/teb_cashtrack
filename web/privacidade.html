@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Política de privacidade — CashTrack</title>
+  <link rel="icon" type="image/png" href="favicon.png"/>
+  <style>
+    :root { --primary: #006c49; --text: #161d19; --muted: #3c4a42; --bg: #f4fbf4; --card: #ffffff; --border: #bbcabf; }
+    @media (prefers-color-scheme: dark) {
+      :root { --primary: #4edea3; --text: #dde4dd; --muted: #bbcabf; --bg: #0e1511; --card: #161d19; --border: #3c4a42; }
+    }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    main { max-width: 760px; margin: 0 auto; padding: 32px 16px 48px; }
+    article { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 24px; }
+    h1 { margin-top: 0; font-size: 28px; line-height: 1.25; }
+    h2 { font-size: 19px; margin-top: 28px; color: var(--primary); }
+    .muted { color: var(--muted); font-size: 14px; }
+    a { color: var(--primary); }
+  </style>
+</head>
+<body>
+<main>
+<article>
+  <h1>Política de privacidade do CashTrack</h1>
+  <p class="muted">Última atualização: 23 de outubro de 2026</p>
+
+  <p>O CashTrack é um aplicativo de controle financeiro pessoal (contas, cartões de crédito,
+  lançamentos e lista de compras), disponível para Android e na web, desenvolvido por
+  ThatExoticBug. Esta política explica quais dados o app usa, para quê, e como você pode
+  excluí-los.</p>
+
+  <h2>Dados que coletamos</h2>
+  <ul>
+    <li><strong>Conta:</strong> seu e-mail e senha, usados para entrar no app. A senha é
+      gerenciada pelo Firebase Authentication (Google) e nunca fica visível para nós.</li>
+    <li><strong>Dados financeiros que você cadastra:</strong> contas e cartões, saldos iniciais,
+      lançamentos (valor, data, descrição, tag), tags, categorias e listas de compras.</li>
+    <li><strong>Notificações de pagamento (somente Android, opcional):</strong> se você ativar o
+      <em>lançamento automático</em> e conceder o acesso às notificações, o app lê apenas as
+      notificações dos apps que você escolher (por padrão, o Samsung Wallet). Dessas
+      notificações são guardados o título e o texto, o valor, o estabelecimento e o final do
+      cartão. Notificações de outros apps são ignoradas e não são lidas nem guardadas.</li>
+  </ul>
+  <p>O app não coleta localização, contatos, fotos, identificadores de publicidade nem dados de
+  navegação, e não exibe anúncios.</p>
+
+  <h2>Como usamos os dados</h2>
+  <ul>
+    <li>Para exibir e calcular seus saldos, faturas, extratos e gastos por tag.</li>
+    <li>Para criar lançamentos automaticamente a partir das notificações de pagamento, quando
+      você ativa esse recurso.</li>
+    <li>Para manter seus dados sincronizados entre o celular e a versão web.</li>
+  </ul>
+  <p>Os dados não são vendidos, não são usados para publicidade e não são compartilhados com
+  terceiros.</p>
+
+  <h2>Onde os dados ficam</h2>
+  <p>Os dados são armazenados no Google Firebase (Cloud Firestore e Firebase Authentication),
+  que atua como provedor de infraestrutura. A comunicação é criptografada (HTTPS/TLS) e as
+  regras de acesso permitem que cada usuário leia e altere somente os próprios dados.</p>
+
+  <h2>Seus direitos e exclusão dos dados</h2>
+  <p>Você pode corrigir ou apagar qualquer registro pelo próprio app. Para apagar a conta e
+  <strong>todos</strong> os dados de uma vez, use <em>Dados do usuário → Excluir minha
+  conta</em> no app ou na versão web. Veja o passo a passo em
+  <a href="excluir-conta.html">Excluir conta</a>. A exclusão é imediata e definitiva.</p>
+  <p>Você também pode desligar o lançamento automático ou revogar o acesso às notificações a
+  qualquer momento, nas configurações do app ou do Android.</p>
+
+  <h2>Crianças</h2>
+  <p>O CashTrack não é direcionado a menores de 18 anos.</p>
+
+  <h2>Contato</h2>
+  <p>Dúvidas ou pedidos sobre seus dados (Lei Geral de Proteção de Dados — LGPD):
+  <!-- TODO: e-mail de contato do desenvolvedor (o mesmo informado no Google Play Console). -->
+  <a href="mailto:CONTATO">CONTATO</a>.</p>
+
+  <h2>Alterações</h2>
+  <p>Se esta política mudar, a nova versão será publicada nesta página com a data atualizada.</p>
+</article>
+</main>
+</body>
+</html>

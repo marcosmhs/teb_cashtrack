@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../controllers/auth_controller.dart';
+import '../data/app_links.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import '../widgets/dialogs.dart';
@@ -154,6 +155,11 @@ class _LoginViewState extends State<LoginView> {
                     OutlinedButton(
                       onPressed: _loading ? null : () => _authenticate(createAccount: true),
                       child: const Text('Criar conta'),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    TextButton(
+                      onPressed: () => openLink(context, AppLinks.privacyPolicy),
+                      child: const Text('Política de privacidade'),
                     ),
                   ],
                 ),

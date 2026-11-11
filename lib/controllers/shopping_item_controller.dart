@@ -1,3 +1,4 @@
+import '../data/local_first.dart';
 import '../data/user_collections.dart';
 import '../models/shopping_item.dart';
 
@@ -14,11 +15,9 @@ class ShoppingItemController {
     });
   }
 
-  Future<void> saveItem(ShoppingItem item) async {
-    await _collection.doc(item.id).set(item.toMap());
-  }
+  Future<void> saveItem(ShoppingItem item) =>
+      writeLocal(_collection.doc(item.id).set(item.toMap()), 'o item');
 
-  Future<void> deleteItem(String id) async {
-    await _collection.doc(id).delete();
-  }
+  Future<void> deleteItem(String id) =>
+      writeLocal(_collection.doc(id).delete(), 'a exclusão do item');
 }

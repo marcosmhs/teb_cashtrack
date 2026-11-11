@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart' show FirebaseFirestore;
 
+import '../data/local_first.dart';
 import '../data/user_collections.dart';
 import '../models/account.dart';
 
@@ -19,8 +20,7 @@ class AccountController {
   /// na mesma operação, garantindo um único meio de pagamento principal.
   Future<void> saveAccount(Account account) async {
     if (!account.isDefault) {
-      await _collection.doc(account.id).set(account.toMap());
-      return;
+      return writeLocal(_collection.doc(account.id).set(account.toMap()), 'a conta');
     }
     final currentDefaults = await _collection.where('isDefault', isEqualTo: true).get();
     final batch = FirebaseFirestore.instance.batch();
@@ -28,10 +28,9 @@ class AccountController {
       batch.update(doc.reference, {'isDefault': false});
     }
     batch.set(_collection.doc(account.id), account.toMap());
-    await batch.commit();
+    return writeLocal(batch.commit(), 'a conta');
   }
 
-  Future<void> deleteAccount(String id) async {
-    await _collection.doc(id).delete();
-  }
+  Future<void> deleteAccount(String id) =>
+      writeLocal(_collection.doc(id).delete(), 'a exclusão da conta');
 }

@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../data/local_first.dart';
 import '../data/user_collections.dart';
 import '../models/tag.dart';
 
@@ -15,9 +16,7 @@ class TagController {
         .map((s) => s.docs.map((d) => Tag.fromMap(d.data(), d.id)).toList());
   }
 
-  Future<void> saveTag(Tag tag) async {
-    await _collection.doc(tag.id).set(tag.toMap());
-  }
+  Future<void> saveTag(Tag tag) => writeLocal(_collection.doc(tag.id).set(tag.toMap()), 'a tag');
 
   /// Exclui a tag e remove a referência a ela dos lançamentos, evitando tags órfãs.
   Future<void> deleteTag(String id) async {
@@ -33,8 +32,8 @@ class TagController {
       for (final doc in linked.docs.skip(i).take(chunk)) {
         batch.update(doc.reference, {'tagId': null});
       }
-      await batch.commit();
+      await writeLocal(batch.commit(), 'a remoção da tag dos lançamentos');
     }
-    await _collection.doc(id).delete();
+    return writeLocal(_collection.doc(id).delete(), 'a exclusão da tag');
   }
 }

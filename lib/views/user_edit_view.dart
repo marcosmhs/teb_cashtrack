@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../controllers/auth_controller.dart';
+import '../data/app_links.dart';
+import '../services/account_deletion_service.dart';
 import '../services/legacy_migration_service.dart';
 import '../services/notification_capture_service.dart';
 import 'notification_settings_view.dart';
@@ -22,6 +24,7 @@ class _UserEditViewState extends State<UserEditView> {
   final _passwordController = TextEditingController();
   bool _saving = false;
   bool _migrating = false;
+  bool _deleting = false;
 
   @override
   void dispose() {
@@ -67,6 +70,40 @@ class _UserEditViewState extends State<UserEditView> {
     await _authController.signOut();
   }
 
+  Future<void> _deleteAccount() async {
+    final confirmed = await confirmAction(
+      context,
+      title: 'Excluir sua conta?',
+      message:
+          'Sua conta e todos os seus dados (contas, lançamentos, tags, listas de compras e '
+          'notificações capturadas) serão apagados definitivamente. Não é possível desfazer.',
+      confirmLabel: 'Continuar',
+      destructive: true,
+    );
+    if (!confirmed || !mounted) return;
+    final password = await promptText(
+      context,
+      title: 'Confirme sua senha',
+      label: 'Senha',
+      confirmLabel: 'Excluir conta',
+      obscureText: true,
+    );
+    if (password == null || !mounted) return;
+
+    setState(() => _deleting = true);
+    try {
+      await AccountDeletionService().deleteAccount(password);
+      // O AuthGate exibe o login quando o usuário deixa de existir.
+      if (mounted) Navigator.of(context).popUntil((route) => route.isFirst);
+    } catch (error) {
+      debugPrint('Erro ao excluir conta: $error');
+      if (mounted) {
+        setState(() => _deleting = false);
+        showMessage(context, AuthController.describeError(error));
+      }
+    }
+  }
+
   Future<void> _importLegacyData() async {
     final confirmed = await confirmAction(
       context,
@@ -94,7 +131,7 @@ class _UserEditViewState extends State<UserEditView> {
 
   @override
   Widget build(BuildContext context) {
-    final busy = _saving || _migrating;
+    final busy = _saving || _migrating || _deleting;
     return Scaffold(
       appBar: AppBar(title: const Text('Dados do usuário')),
       body: SingleChildScrollView(
@@ -196,6 +233,27 @@ class _UserEditViewState extends State<UserEditView> {
                 ),
                 icon: const Icon(Icons.logout),
                 label: const Text('Sair'),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Wrap(
+                alignment: WrapAlignment.center,
+                spacing: AppSpacing.xs,
+                children: [
+                  TextButton(
+                    onPressed: () => openLink(context, AppLinks.privacyPolicy),
+                    child: const Text('Política de privacidade'),
+                  ),
+                  TextButton(
+                    onPressed: busy ? null : _deleteAccount,
+                    style: TextButton.styleFrom(foregroundColor: context.colors.error),
+                    child: _deleting
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('Excluir minha conta'),
+                  ),
+                ],
               ),
             ],
           ),

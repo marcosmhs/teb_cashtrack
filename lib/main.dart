@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/intl.dart';
 import 'package:teb_cashtrack/controllers/auth_controller.dart';
+import 'package:teb_cashtrack/data/local_first.dart';
 import 'package:teb_cashtrack/firebase_options.dart';
 import 'package:teb_cashtrack/theme.dart';
 import 'package:teb_cashtrack/views/app_shell.dart';
@@ -32,6 +33,7 @@ class Cashtrack extends StatelessWidget {
     return MaterialApp(
       title: 'TEB CashTrack',
       debugShowCheckedModeBanner: false,
+      scaffoldMessengerKey: appMessengerKey,
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
       locale: const Locale('pt', 'BR'),
