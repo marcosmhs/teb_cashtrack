@@ -93,7 +93,7 @@ Nada é processado de forma efêmera e nada é usado para publicidade, análise 
 
 - `targetSdk 36` (exigido para apps novos e atualizações desde 31/08/2026) e `compileSdk 36`
   em `android/app/build.gradle.kts`.
-- Formato AAB assinado, `minSdk 23`.
+- Formato AAB assinado, `minSdk 24` (mínimo da Proteção Automática do Play; Android 7.0).
 - Exclusão de conta pelo app e pela web (*Dados do usuário → Excluir minha conta*), que apaga
   `users/{uid}/...` e o login do Firebase Auth.
 - Link para a política de privacidade no login e em *Dados do usuário*.
