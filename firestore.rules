@@ -9,15 +9,5 @@ service cloud.firestore {
     match /users/{userId}/{document=**} {
       allow read, write: if isOwner(userId);
     }
-
-    // TEMPORÁRIO: leitura das coleções antigas (na raiz, sem dono) para a
-    // importação feita em "Dados do usuário > Importar dados antigos".
-    // Remova este bloco depois de migrar os dados.
-    match /{legacyCollection}/{docId} {
-      allow read: if request.auth != null
-        && legacyCollection in ['accounts', 'transactions', 'tags',
-                                'shopping_categories', 'shopping_items',
-                                'shopping_purchase_lists'];
-    }
   }
 }

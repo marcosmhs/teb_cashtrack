@@ -5,15 +5,15 @@ para os formulários do Play Console.
 
 ## 1. Antes de enviar
 
-- [ ] Preencher o e-mail de contato em `web/privacidade.html` (procure `CONTATO`).
+- [x] E-mail de contato em `web/privacidade.html`: thatexoticbug@gmail.com.
 - [ ] Publicar a versão web, que também serve as páginas públicas exigidas pelo Play:
       `flutter build web --release && firebase deploy --only hosting`
   - Política de privacidade: https://teb-cashtrack.web.app/privacidade.html
   - Exclusão de conta: https://teb-cashtrack.web.app/excluir-conta.html
-- [ ] Remover o bloco "TEMPORÁRIO" de `firestore.rules` e publicar as regras
-      (`firebase deploy --only firestore:rules`). Com cadastro aberto ao público, qualquer
+- [ ] Publicar as regras sem o bloco "TEMPORÁRIO" (já removido de `firestore.rules`):
+      `firebase deploy --only firestore:rules`. Com cadastro aberto ao público, qualquer
       usuário logado poderia ler as coleções antigas da raiz.
-- [ ] Aumentar a versão em `pubspec.yaml` (`version: x.y.z+N`). O número depois do `+`
+- [x] Aumentar a versão em `pubspec.yaml` (`version: x.y.z+N`). O número depois do `+`
       (versionCode) precisa ser maior a cada envio.
 - [ ] `flutter analyze` e `flutter test` sem erros.
 
@@ -29,6 +29,10 @@ O AAB é assinado com `android/cashtrack-release.jks` (configurado em `android/k
 No Play Console ative o **Play App Signing**: essa chave passa a ser a *chave de upload* e o
 Google guarda a chave final do app. Guarde cópias do `.jks` e do `key.properties`; sem eles não é
 possível enviar atualizações (dá para pedir a troca da chave de upload ao suporte, mas demora).
+
+Com a chave gerada pelo Google, o app baixado do Play tem outra assinatura que o APK instalado à
+mão: desinstale o APK antes de instalar pelo Play (os dados ficam na nuvem; só os ajustes do
+lançamento automático, guardados no aparelho, precisam ser refeitos).
 
 ## 3. Conta de desenvolvedor
 
