@@ -139,7 +139,7 @@ class _TransactionFormState extends State<TransactionForm> {
     if (!confirmed || !mounted) return;
     setState(() => _saving = true);
     try {
-      await _txController.deleteTransaction(widget.transaction!.id);
+      await _txController.deleteTransaction(widget.transaction!);
       if (!mounted) return;
       Navigator.of(context).pop();
       showMessage(context, 'Lançamento excluído.');

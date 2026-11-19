@@ -31,8 +31,8 @@ android {
 
     defaultConfig {
         applicationId = "br.com.thatexoticbug.teb_cashtrack"
-        // Exigido pelo firebase_auth.
-        minSdk = 23
+        // 24 é o mínimo da Proteção Automática do Google Play (o firebase_auth pede 23).
+        minSdk = 24
         targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName

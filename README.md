@@ -23,16 +23,11 @@ Convenções:
 - Cores vêm do tema (`context.colors`, `context.finance`); não use `Color(0xFF...)` nas telas.
 - Os modelos leem o formato antigo (reais em `double`, datas em string ISO) para manter compatibilidade.
 
-## Dados por usuário e migração
+## Dados por usuário
 
 Todos os dados ficam em `users/{uid}/{coleção}` e as regras (`firestore.rules`) só permitem acesso ao dono.
-
-Para quem usava a versão anterior (coleções na raiz do Firestore):
-
-1. Publique as regras: `firebase deploy --only firestore:rules`.
-2. Entre no app e use **Dados do usuário → Importar dados antigos**.
-3. Confira os dados e remova o bloco "TEMPORÁRIO" de `firestore.rules`, publicando de novo.
-   As coleções antigas podem então ser apagadas pelo console do Firebase.
+A importação das coleções antigas (na raiz do Firestore, da versão anterior) já foi feita e foi
+removida do app na versão 1.2.0; as coleções antigas podem ser apagadas pelo console do Firebase.
 
 ## App Android
 
@@ -67,8 +62,20 @@ conexão. Esse banco é o cache persistente do Firestore (SQLite no Android), li
 - O serviço de lançamento automático também grava no banco local quando está sem internet.
 
 Precisam de internet: o primeiro login (e entrar de novo depois de sair), criar conta, trocar
-e-mail/senha, excluir a conta e importar dados antigos. Se a mesma informação for alterada em
-dois aparelhos sem conexão, vale a última gravação que chegar ao servidor.
+e-mail/senha e excluir a conta. Se a mesma informação for alterada em dois aparelhos sem conexão, vale a última gravação que chegar ao servidor.
+
+### Lançamento automático: manual, notificações ou banco (Pluggy)
+
+Em **Dados do usuário → Lançamento automático** o usuário escolhe como os lançamentos chegam
+sem digitar. A escolha fica em `users/{uid}/settings/import` (campo `mode`: `manual`,
+`notifications` ou `pluggy`; sem valor, vale `notifications`) e vale para todos os aparelhos:
+
+- o serviço de notificações (Kotlin) só cria lançamentos no modo `notifications`;
+- a sincronização da Pluggy (`functions/`) só importa lançamentos no modo `pluggy`.
+
+A importação pelo banco usa o Meu Pluggy (Open Finance) e Cloud Functions; configuração e
+detalhes em [functions/README.md](functions/README.md). Os lançamentos importados têm
+`source: "pluggy"` e aparecem marcados como "banco" na lista.
 
 ### Lançamento automático (notificações)
 

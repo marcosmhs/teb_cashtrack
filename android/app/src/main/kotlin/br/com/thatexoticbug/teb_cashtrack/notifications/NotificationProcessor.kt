@@ -5,6 +5,7 @@ import android.util.Log
 import com.google.firebase.FirebaseApp
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.DocumentReference
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
 import java.security.MessageDigest
@@ -22,6 +23,9 @@ import java.util.Locale
 object NotificationProcessor {
     private const val TAG = "CashTrackNotif"
 
+    /** Igual a `ImportMode.notifications` no app (`settings/import`, campo `mode`). */
+    const val MODE_NOTIFICATIONS = "notifications"
+
     fun process(context: Context, pkg: String, title: String?, text: String?, postedAt: Long) {
         if (FirebaseApp.getApps(context).isEmpty()) FirebaseApp.initializeApp(context)
         val uid = FirebaseAuth.getInstance().currentUser?.uid
@@ -29,13 +33,36 @@ object NotificationProcessor {
             Log.i(TAG, "Notificação ignorada: nenhum usuário logado")
             return
         }
+        val userDoc = FirebaseFirestore.getInstance().collection("users").document(uid)
 
+        // A forma de lançamento automático (manual, notificações ou Pluggy) é escolhida no app
+        // e vale para todos os aparelhos: fora do modo notificações, nada é capturado.
+        userDoc.collection("settings").document("import").get()
+            .addOnSuccessListener { doc ->
+                val mode = doc.getString("mode") ?: MODE_NOTIFICATIONS
+                if (mode == MODE_NOTIFICATIONS) {
+                    capture(context, userDoc, pkg, title, text, postedAt)
+                } else {
+                    Log.i(TAG, "Notificação ignorada: lançamento automático no modo $mode")
+                }
+            }
+            // Sem a configuração (ex.: sem internet e sem cache), mantém o comportamento padrão.
+            .addOnFailureListener { capture(context, userDoc, pkg, title, text, postedAt) }
+    }
+
+    private fun capture(
+        context: Context,
+        userDoc: DocumentReference,
+        pkg: String,
+        title: String?,
+        text: String?,
+        postedAt: Long,
+    ) {
         val settings = NotificationSettings(context)
         val trusted = pkg in NotificationSettings.TRUSTED_PACKAGES
         val parsed = NotificationParser.parse(title, text, trusted)
         // Mesmo conteúdo no mesmo minuto = mesma notificação (reposts/atualizações não duplicam).
         val captureId = sha1("$pkg|$title|$text|${postedAt / 60_000}")
-        val userDoc = FirebaseFirestore.getInstance().collection("users").document(uid)
 
         val capture = hashMapOf<String, Any?>(
             "package" to pkg,

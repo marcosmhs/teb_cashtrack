@@ -31,8 +31,9 @@ class Transaction {
   final String? tagId;
   final TransactionType type;
 
-  /// Origem do lançamento: `null` = manual; `notification` = criado a partir de
-  /// uma notificação de pagamento (Android).
+  /// Origem do lançamento: `null` = manual; `notification` = criado a partir de uma
+  /// notificação de pagamento (Android); `pluggy` = importado do banco pela Pluggy
+  /// (Open Finance, ver functions/).
   final String? source;
 
   const Transaction({
@@ -46,9 +47,21 @@ class Transaction {
     this.source,
   });
 
+  static const sourcePluggy = 'pluggy';
   static const sourceNotification = 'notification';
 
-  bool get isAutomatic => source == sourceNotification;
+  bool get isAutomatic => source != null;
+
+  /// Lançamentos da Pluggy são atualizados pela sincronização; excluir um deles
+  /// precisa ser lembrado para ele não voltar (ver [TransactionController]).
+  bool get isFromPluggy => source == sourcePluggy;
+
+  /// Marca exibida na lista de lançamentos.
+  String? get sourceLabel => switch (source) {
+    sourcePluggy => 'banco',
+    null => null,
+    _ => 'automático',
+  };
 
   bool get isDebit => type == TransactionType.debit;
 

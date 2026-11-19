@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:teb_cashtrack/data/user_collections.dart';
 import 'package:teb_cashtrack/models/account.dart';
+import 'package:teb_cashtrack/models/import_settings.dart';
 import 'package:teb_cashtrack/models/notification_capture.dart';
 import 'package:teb_cashtrack/models/transaction.dart';
 import 'package:teb_cashtrack/services/notification_capture_service.dart';
@@ -84,7 +85,27 @@ void main() {
   group('Firestore: NotificationProcessor.kt <-> modelos Dart', () {
     test('coleções usadas pelo Kotlin existem no Dart', () {
       final kotlin = _all(_processor, r'collection\("(\w+)"\)', 'as coleções no Kotlin');
-      expect({'users', ...UserCollections.all, UserCollections.notificationCaptures}, containsAll(kotlin));
+      expect({
+        'users',
+        ...UserCollections.all,
+        UserCollections.notificationCaptures,
+        UserCollections.settings,
+      }, containsAll(kotlin));
+    });
+
+    test('lê a forma de lançamento automático do mesmo documento e campo que o app grava', () {
+      expect(
+        _one(_processor, r'collection\("settings"\)\.document\("(\w+)"\)', 'o documento de modo'),
+        ImportSettings.docId,
+      );
+      expect(
+        _one(_processor, r'getString\("(\w+)"\) \?: MODE_NOTIFICATIONS', 'o campo de modo'),
+        ImportSettings.modeField,
+      );
+      expect(
+        _one(_processor, r'MODE_NOTIFICATIONS = "(\w+)"', 'o valor do modo notificações'),
+        ImportMode.notifications.storageKey,
+      );
     });
 
     test('lançamento gravado tem exatamente os campos de Transaction', () {
@@ -134,7 +155,12 @@ void main() {
     });
 
     test('campos da conta lidos pelo Kotlin existem em Account', () {
-      final kotlin = _all(_processor, r'get(?:String|Boolean)\("(\w+)"\)', 'os campos da conta');
+      final chooseAccount = _one(
+        _processor,
+        r'(fun chooseAccount[\s\S]*?)private fun sha1',
+        'a função chooseAccount',
+      );
+      final kotlin = _all(chooseAccount, r'get(?:String|Boolean)\("(\w+)"\)', 'os campos da conta');
       final dart = Account(
         id: 'x',
         name: 'Conta',

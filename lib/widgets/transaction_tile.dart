@@ -27,7 +27,7 @@ class TransactionTile extends StatelessWidget {
     final subtitle = [
       formatDate(t.date),
       ?accountName,
-      if (t.isAutomatic) 'automático',
+      ?t.sourceLabel,
     ].join(' • ');
 
     return InkWell(

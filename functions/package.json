@@ -1,0 +1,22 @@
+{
+  "name": "cashtrack-functions",
+  "private": true,
+  "description": "Sincronização das contas da Pluggy (Open Finance) com o Firestore do CashTrack.",
+  "main": "lib/index.js",
+  "engines": {
+    "node": "22"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "tsc && node --test \"lib/**/*.test.js\"",
+    "deploy": "npm run build && firebase deploy --only functions"
+  },
+  "dependencies": {
+    "firebase-admin": "^14.5.1",
+    "firebase-functions": "^7.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "~5.9.0"
+  }
+}
