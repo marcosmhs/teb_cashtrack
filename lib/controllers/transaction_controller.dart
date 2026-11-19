@@ -1,4 +1,5 @@
-import 'package:cloud_firestore/cloud_firestore.dart' show QueryDocumentSnapshot, Timestamp;
+import 'package:cloud_firestore/cloud_firestore.dart'
+    show FieldValue, FirebaseFirestore, QueryDocumentSnapshot, Timestamp;
 
 import '../data/local_first.dart';
 import '../data/user_collections.dart';
@@ -47,6 +48,16 @@ class TransactionController {
   Future<void> saveTransaction(Transaction transaction) =>
       writeLocal(_collection.doc(transaction.id).set(transaction.toMap()), 'o lançamento');
 
-  Future<void> deleteTransaction(String id) =>
-      writeLocal(_collection.doc(id).delete(), 'a exclusão do lançamento');
+  /// Exclui o lançamento. Se ele veio da Pluggy, registra a exclusão em
+  /// `pluggy_ignored` na mesma operação, para a sincronização não recriá-lo.
+  Future<void> deleteTransaction(Transaction transaction) {
+    final batch = FirebaseFirestore.instance.batch();
+    if (transaction.isFromPluggy) {
+      batch.set(UserCollections.of(UserCollections.pluggyIgnored).doc(transaction.id), {
+        'deletedAt': FieldValue.serverTimestamp(),
+      });
+    }
+    batch.delete(_collection.doc(transaction.id));
+    return writeLocal(batch.commit(), 'a exclusão do lançamento');
+  }
 }

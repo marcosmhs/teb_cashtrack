@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:rxdart/rxdart.dart';
 
 import '../controllers/account_controller.dart';
+import '../controllers/import_settings_controller.dart';
 import '../controllers/tag_controller.dart';
 import '../controllers/transaction_controller.dart';
 import '../models/account.dart';
+import '../models/import_settings.dart';
 import '../models/tag.dart';
 import '../models/transaction.dart';
 import '../services/balance_calculator.dart';
@@ -15,6 +17,7 @@ import '../widgets/sync_status_button.dart';
 import '../widgets/transaction_form.dart';
 import '../widgets/transaction_tile.dart';
 import '../services/notification_capture_service.dart';
+import 'automatic_entry_view.dart';
 import 'notification_settings_view.dart';
 import 'tag_spending_view.dart';
 import 'transaction_filter_view.dart';
@@ -43,6 +46,9 @@ class _HomeViewState extends State<HomeView> {
   /// No Android, indica se o lançamento automático ainda precisa de permissão.
   bool _notificationAccessPending = false;
 
+  /// O aviso de permissão só aparece quando o modo escolhido é o de notificações.
+  late final Stream<ImportMode> _importMode = ImportSettingsController().watchMode();
+
   @override
   void initState() {
     super.initState();
@@ -59,10 +65,8 @@ class _HomeViewState extends State<HomeView> {
     }
   }
 
-  Future<void> _openNotificationSettings() async {
-    await Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => const NotificationSettingsView()));
+  Future<void> _open(Widget view) async {
+    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => view));
     _checkNotificationAccess();
   }
 
@@ -103,7 +107,7 @@ class _HomeViewState extends State<HomeView> {
             IconButton(
               icon: const Icon(Icons.bolt_outlined),
               tooltip: 'Lançamento automático',
-              onPressed: _openNotificationSettings,
+              onPressed: () => _open(const AutomaticEntryView()),
             ),
           IconButton(
             icon: const Icon(Icons.insights_outlined),
@@ -165,21 +169,29 @@ class _HomeViewState extends State<HomeView> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (_notificationAccessPending) ...[
-              Card(
-                color: context.colors.secondaryContainer,
-                child: ListTile(
-                  leading: const Icon(Icons.bolt),
-                  title: const Text('Ative o lançamento automático'),
-                  subtitle: const Text(
-                    'Crie lançamentos a partir das notificações do Samsung Wallet.',
+            StreamBuilder<ImportMode>(
+              stream: _importMode,
+              builder: (context, snapshot) {
+                if (!_notificationAccessPending || snapshot.data != ImportMode.notifications) {
+                  return const SizedBox.shrink();
+                }
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                  child: Card(
+                    color: context.colors.secondaryContainer,
+                    child: ListTile(
+                      leading: const Icon(Icons.bolt),
+                      title: const Text('Ative o lançamento automático'),
+                      subtitle: const Text(
+                        'Crie lançamentos a partir das notificações do Samsung Wallet.',
+                      ),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () => _open(const NotificationSettingsView()),
+                    ),
                   ),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: _openNotificationSettings,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.md),
-            ],
+                );
+              },
+            ),
             LayoutBuilder(
               builder: (context, constraints) {
                 final balance = _buildBalanceCard(otherAccounts, data.transactions);

@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../controllers/auth_controller.dart';
+import '../controllers/pluggy_controller.dart';
 import '../data/app_links.dart';
 import '../services/account_deletion_service.dart';
 import '../services/notification_capture_service.dart';
-import 'notification_settings_view.dart';
+import 'automatic_entry_view.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import '../widgets/dialogs.dart';
@@ -23,6 +24,7 @@ class _UserEditViewState extends State<UserEditView> {
   final _passwordController = TextEditingController();
   bool _saving = false;
   bool _deleting = false;
+  late final _pluggyStatus = PluggyController().watchStatus();
 
   @override
   void dispose() {
@@ -154,22 +156,29 @@ class _UserEditViewState extends State<UserEditView> {
                 ),
               ),
               const SizedBox(height: AppSpacing.md),
-              if (NotificationCaptureService.isSupported) ...[
-                Card(
-                  child: ListTile(
-                    leading: const Icon(Icons.bolt_outlined),
-                    title: const Text('Lançamento automático'),
-                    subtitle: const Text(
-                      'Criar lançamentos a partir das notificações de pagamento',
+              // Notificações só existem no Android; a Pluggy, só para quem a tem no servidor.
+              StreamBuilder(
+                stream: _pluggyStatus,
+                builder: (context, snapshot) {
+                  if (!NotificationCaptureService.isSupported && snapshot.data == null) {
+                    return const SizedBox.shrink();
+                  }
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                    child: Card(
+                      child: ListTile(
+                        leading: const Icon(Icons.bolt_outlined),
+                        title: const Text('Lançamento automático'),
+                        subtitle: const Text('Manual, notificações do celular ou banco (Pluggy)'),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () => Navigator.of(
+                          context,
+                        ).push(MaterialPageRoute(builder: (_) => const AutomaticEntryView())),
+                      ),
                     ),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () => Navigator.of(
-                      context,
-                    ).push(MaterialPageRoute(builder: (_) => const NotificationSettingsView())),
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.md),
-              ],
+                  );
+                },
+              ),
               OutlinedButton.icon(
                 onPressed: busy ? null : _signOut,
                 style: OutlinedButton.styleFrom(

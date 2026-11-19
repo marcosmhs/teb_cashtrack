@@ -11,7 +11,13 @@ class AccountDeletionService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  static const _collections = [...UserCollections.all, UserCollections.notificationCaptures];
+  static const _collections = [
+    ...UserCollections.all,
+    UserCollections.pluggyAccounts,
+    UserCollections.pluggyIgnored,
+    UserCollections.settings,
+    UserCollections.notificationCaptures,
+  ];
 
   Future<void> deleteAccount(String password) async {
     final user = _auth.currentUser;

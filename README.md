@@ -64,6 +64,19 @@ conexão. Esse banco é o cache persistente do Firestore (SQLite no Android), li
 Precisam de internet: o primeiro login (e entrar de novo depois de sair), criar conta, trocar
 e-mail/senha e excluir a conta. Se a mesma informação for alterada em dois aparelhos sem conexão, vale a última gravação que chegar ao servidor.
 
+### Lançamento automático: manual, notificações ou banco (Pluggy)
+
+Em **Dados do usuário → Lançamento automático** o usuário escolhe como os lançamentos chegam
+sem digitar. A escolha fica em `users/{uid}/settings/import` (campo `mode`: `manual`,
+`notifications` ou `pluggy`; sem valor, vale `notifications`) e vale para todos os aparelhos:
+
+- o serviço de notificações (Kotlin) só cria lançamentos no modo `notifications`;
+- a sincronização da Pluggy (`functions/`) só importa lançamentos no modo `pluggy`.
+
+A importação pelo banco usa o Meu Pluggy (Open Finance) e Cloud Functions; configuração e
+detalhes em [functions/README.md](functions/README.md). Os lançamentos importados têm
+`source: "pluggy"` e aparecem marcados como "banco" na lista.
+
 ### Lançamento automático (notificações)
 
 Um `NotificationListenerService` nativo (`android/app/src/main/kotlin/.../notifications/`) lê as

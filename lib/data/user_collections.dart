@@ -15,6 +15,16 @@ class UserCollections {
   static const shoppingItems = 'shopping_items';
   static const shoppingPurchaseLists = 'shopping_purchase_lists';
 
+  /// Contas encontradas na Pluggy e a qual conta do app cada uma está vinculada.
+  /// Gravadas pela sincronização (functions/) e vinculadas pela tela da Pluggy.
+  static const pluggyAccounts = 'pluggy_accounts';
+
+  /// Lançamentos da Pluggy excluídos pelo usuário: a sincronização não os recria.
+  static const pluggyIgnored = 'pluggy_ignored';
+
+  /// Documentos de configuração e estado, como `settings/pluggy`.
+  static const settings = 'settings';
+
   /// Notificações de pagamento capturadas no Android (gravadas pelo serviço nativo).
   static const notificationCaptures = 'notification_captures';
 
